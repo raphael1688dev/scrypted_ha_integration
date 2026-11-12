@@ -78,6 +78,7 @@ async def test_retrieve_token_builds_request(
 ):
     """Token retrieval should build the login request and return the token."""
     mock_response = AsyncMock()
+    mock_response.release = MagicMock()
     mock_response.json = AsyncMock(return_value=login_success_fixture)
 
     mock_session = MagicMock(spec=aiohttp.ClientSession)
@@ -94,6 +95,7 @@ async def test_retrieve_token_builds_request(
     assert called_url == expected_url
     headers = mock_session.get.call_args.kwargs["headers"]
     assert headers["authorization"].startswith("Basic ")
+    mock_response.release.assert_called_once_with()
 
 
 async def test_retrieve_token_encodes_credentials_as_utf8(login_success_fixture):
@@ -103,6 +105,7 @@ async def test_retrieve_token_encodes_credentials_as_utf8(login_success_fixture)
     reached scrypted garbled and the login failed.
     """
     mock_response = AsyncMock()
+    mock_response.release = MagicMock()
     mock_response.json = AsyncMock(return_value=login_success_fixture)
     mock_session = MagicMock(spec=aiohttp.ClientSession)
     mock_session.get = AsyncMock(return_value=mock_response)
@@ -119,6 +122,7 @@ async def test_retrieve_token_encodes_credentials_as_utf8(login_success_fixture)
 async def test_retrieve_token_no_token_in_response(login_error_not_logged_in_fixture):
     """Test ValueError is raised when response has no token."""
     mock_response = AsyncMock()
+    mock_response.release = MagicMock()
     mock_response.json = AsyncMock(return_value=login_error_not_logged_in_fixture)
 
     mock_session = AsyncMock(spec=aiohttp.ClientSession)
@@ -132,6 +136,8 @@ async def test_retrieve_token_no_token_in_response(login_error_not_logged_in_fix
 
     with pytest.raises(ValueError, match="No token in response"):
         await http.retrieve_token(data, mock_session)
+    # Released even when the reply carries no token.
+    mock_response.release.assert_called_once_with()
 
 
 async def test_retrieve_token_invalid_host_too_many_colons():
