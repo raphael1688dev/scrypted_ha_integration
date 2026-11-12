@@ -7,7 +7,7 @@ from custom_components.scrypted.const import SIGNAL_NEW_DEVICE
 from tests.conftest import setup_entry
 
 
-async def test_object_detection_event(hass, fake_sdk, enable_custom_integrations):
+async def test_object_detection_event(hass, fake_sdk):
     """Object detection event."""
     await setup_entry(hass)
 
@@ -32,9 +32,7 @@ async def test_object_detection_event(hass, fake_sdk, enable_custom_integrations
     assert state.attributes["score"] == 0.92
 
 
-async def test_unknown_detection_class_extends_event_types(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_unknown_detection_class_extends_event_types(hass, fake_sdk):
     """Unknown detection class extends event types."""
     await setup_entry(hass)
     fake_sdk.systemManager.fire_device_event(
@@ -47,7 +45,7 @@ async def test_unknown_detection_class_extends_event_types(
     assert state.attributes["event_type"] == "raccoon"
 
 
-async def test_doorbell_press_event(hass, fake_sdk, enable_custom_integrations):
+async def test_doorbell_press_event(hass, fake_sdk):
     """Doorbell press event."""
     await setup_entry(hass)
 
@@ -66,9 +64,7 @@ async def test_doorbell_press_event(hass, fake_sdk, enable_custom_integrations):
     assert hass.states.get("event.doorbell_doorbell").last_changed == last_changed
 
 
-async def test_object_types_failure_skips_entity(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_object_types_failure_skips_entity(hass, fake_sdk):
     """Unknown classes -> no entity; motion is filtered so it could never fire."""
     fake_sdk.systemManager.getDeviceById(
         "cam1"
@@ -77,9 +73,7 @@ async def test_object_types_failure_skips_entity(
     assert hass.states.get("event.porch_front_door_cam_object_detected") is None
 
 
-async def test_motion_only_detector_skips_entity(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_motion_only_detector_skips_entity(hass, fake_sdk):
     """Motion-only detectors are covered by the motion binary_sensor."""
     fake_sdk.systemManager.getDeviceById("cam1").getObjectTypes.return_value = {
         "classes": ["motion"]
@@ -88,9 +82,7 @@ async def test_motion_only_detector_skips_entity(
     assert hass.states.get("event.porch_front_door_cam_object_detected") is None
 
 
-async def test_motion_class_excluded_from_event_types(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_motion_class_excluded_from_event_types(hass, fake_sdk):
     """Motion is excluded and a class listed twice appears once."""
     fake_sdk.systemManager.getDeviceById("cam1").getObjectTypes.return_value = {
         "classes": ["motion", "person", "car", "person"]
@@ -100,9 +92,7 @@ async def test_motion_class_excluded_from_event_types(
     assert state.attributes["event_types"] == ["person", "car"]
 
 
-async def test_motion_detections_do_not_fire_events(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_motion_detections_do_not_fire_events(hass, fake_sdk):
     """Motion detections do not fire events."""
     await setup_entry(hass)
 
@@ -136,9 +126,7 @@ async def test_motion_detections_do_not_fire_events(
     assert "motion" not in state.attributes["event_types"]
 
 
-async def test_detection_without_class_ignored(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_detection_without_class_ignored(hass, fake_sdk):
     """Detection without class ignored."""
     await setup_entry(hass)
     fake_sdk.systemManager.fire_device_event(
@@ -149,9 +137,7 @@ async def test_detection_without_class_ignored(
     assert state.state == "unknown"
 
 
-async def test_new_device_signal_unknown_id_ignored(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_new_device_signal_unknown_id_ignored(hass, fake_sdk):
     """A new-device announcement for an id scrypted cannot resolve adds nothing."""
     entry = await setup_entry(hass)
     before = len(hass.states.async_all("event"))
@@ -162,9 +148,7 @@ async def test_new_device_signal_unknown_id_ignored(
     assert len(hass.states.async_all("event")) == before
 
 
-async def test_multiple_classes_each_fire_an_event(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_multiple_classes_each_fire_an_event(hass, fake_sdk):
     """Each class in one payload produces its own observable event."""
     await setup_entry(hass)
     entity_id = "event.porch_front_door_cam_object_detected"

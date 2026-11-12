@@ -186,21 +186,3 @@ class ScryptedThermostat(ScryptedDeviceEntity, ClimateEntity):
             command["mode"] = HVAC_TO_SCRYPTED[kwargs[ATTR_HVAC_MODE]]
         if command:
             await self._async_device_command("setTemperature", command)
-
-
-# Home Assistant 2026.11 renamed the temperature members to native_*; earlier
-# releases only read the old names. 2026.11 is the minimum supported version, so
-# this only serves the test suite: pytest-homeassistant-custom-component still
-# pins 2026.10. Remove once it ships a 2026.11 release.
-if not hasattr(ClimateEntity, "native_current_temperature"):  # pragma: no cover
-    ScryptedThermostat._attr_temperature_unit = UnitOfTemperature.CELSIUS
-    ScryptedThermostat.current_temperature = (
-        ScryptedThermostat.native_current_temperature
-    )
-    ScryptedThermostat.target_temperature = ScryptedThermostat.native_target_temperature
-    ScryptedThermostat.target_temperature_low = (
-        ScryptedThermostat.native_target_temperature_low
-    )
-    ScryptedThermostat.target_temperature_high = (
-        ScryptedThermostat.native_target_temperature_high
-    )

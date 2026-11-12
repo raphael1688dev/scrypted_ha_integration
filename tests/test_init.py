@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientResponseError
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 from scrypted_sdk import ScryptedConnectionError
 
 from homeassistant.components.lovelace.const import DOMAIN as LL_DOMAIN
@@ -578,7 +578,7 @@ async def test_panel_reload_uses_consistent_url_path(
     assert f"{DOMAIN}_token" in mock_panel_lifecycle["registered"]
 
 
-async def test_setup_entry_creates_client_and_unloads(hass, enable_custom_integrations):
+async def test_setup_entry_creates_client_and_unloads(hass):
     """Entities enabled: client connects on setup and disconnects on unload."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -609,7 +609,7 @@ async def test_setup_entry_creates_client_and_unloads(hass, enable_custom_integr
     assert client.connected is False
 
 
-async def test_setup_entry_entities_disabled(hass, enable_custom_integrations):
+async def test_setup_entry_entities_disabled(hass):
     """Entities disabled: no client, panel-only setup still succeeds."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -660,9 +660,7 @@ async def test_setup_entry_auth_error_starts_reauth(hass, patch_retrieve_token):
     assert flows[0]["context"]["entry_id"] == entry.entry_id
 
 
-async def test_setup_entry_not_ready_on_engineio_failure(
-    hass, enable_custom_integrations
-):
+async def test_setup_entry_not_ready_on_engineio_failure(hass):
     """engine.io connect failure raises ConfigEntryNotReady (setup retry)."""
 
     async def _fail(self):
@@ -701,7 +699,7 @@ async def test_unload_entry_fails_when_platforms_fail(hass):
         assert await scrypted.async_unload_entry(hass, entry) is False
 
 
-async def test_remove_config_entry_device(hass, fake_sdk, enable_custom_integrations):
+async def test_remove_config_entry_device(hass, fake_sdk):
     """Devices are only removable once scrypted stops exposing them."""
     entry = await setup_entry(hass)
     device_registry = dr.async_get(hass)
@@ -729,9 +727,7 @@ async def test_remove_config_entry_device(hass, fake_sdk, enable_custom_integrat
     assert await scrypted.async_remove_config_entry_device(hass, entry, bell)
 
 
-async def test_remove_config_entry_device_entities_disabled(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_remove_config_entry_device_entities_disabled(hass, fake_sdk):
     """With entities disabled, any leftover device is removable."""
     entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: "x"})
     entry.add_to_hass(hass)
@@ -747,9 +743,7 @@ async def test_remove_config_entry_device_entities_disabled(
     assert await scrypted.async_remove_config_entry_device(hass, entry, device_entry)
 
 
-async def test_reload_prunes_devices_the_options_now_hide(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_reload_prunes_devices_the_options_now_hide(hass, fake_sdk):
     """Narrowing the options removes devices scrypted still reports."""
     entry = await setup_entry(hass)  # Camera, Doorbell, Sensor
     device_registry = dr.async_get(hass)
@@ -785,9 +779,7 @@ async def test_reload_prunes_devices_the_options_now_hide(
     )
 
 
-async def test_reload_keeps_devices_scrypted_no_longer_reports(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_reload_keeps_devices_scrypted_no_longer_reports(hass, fake_sdk):
     """A device scrypted forgot is left for manual removal, not pruned."""
     entry = await setup_entry(hass)
     device_registry = dr.async_get(hass)

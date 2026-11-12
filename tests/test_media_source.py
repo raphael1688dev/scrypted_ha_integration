@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from homeassistant.components import media_source
 from homeassistant.components.media_player import BrowseError
@@ -39,9 +39,7 @@ async def setup_media_source(hass):
     return entry
 
 
-async def test_browse_root_lists_eligible_cameras(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_browse_root_lists_eligible_cameras(hass, fake_sdk):
     """Browse root lists eligible cameras."""
     await setup_media_source(hass)
     root = await media_source.async_browse_media(hass, "media-source://scrypted")
@@ -51,9 +49,7 @@ async def test_browse_root_lists_eligible_cameras(
     assert root.children[0].can_expand and not root.children[0].can_play
 
 
-async def test_browse_camera_lists_seven_days(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_browse_camera_lists_seven_days(hass, fake_sdk):
     """Browse camera lists seven days."""
     entry = await setup_media_source(hass)
     camera = await media_source.async_browse_media(
@@ -64,9 +60,7 @@ async def test_browse_camera_lists_seven_days(
     assert camera.children[1].title == "Yesterday"
 
 
-async def test_browse_day_lists_clips_with_one_rpc(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_browse_day_lists_clips_with_one_rpc(hass, fake_sdk):
     """Browse day lists clips with one rpc."""
     entry = await setup_media_source(hass)
     device = fake_sdk.systemManager.getDeviceById("cam1")
@@ -101,9 +95,7 @@ async def test_browse_day_lists_clips_with_one_rpc(
     )
 
 
-async def test_day_window_spans_dst_transition(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_day_window_spans_dst_transition(hass, fake_sdk):
     """Fall-back day in America/New_York is 25 hours; the window must cover all of it."""
     await hass.config.async_set_time_zone("America/New_York")
     entry = await setup_media_source(hass)
@@ -116,7 +108,7 @@ async def test_day_window_spans_dst_transition(
     assert window["endTime"] - window["startTime"] == 25 * 3600 * 1000
 
 
-async def test_resolve_clip_with_resources(hass, fake_sdk, enable_custom_integrations):
+async def test_resolve_clip_with_resources(hass, fake_sdk):
     """Resolve clip with resources."""
     entry = await setup_media_source(hass)
     device = fake_sdk.systemManager.getDeviceById("cam1")
@@ -130,9 +122,7 @@ async def test_resolve_clip_with_resources(hass, fake_sdk, enable_custom_integra
     assert play.mime_type == "video/mp4"
 
 
-async def test_resolve_clip_without_resources_falls_back(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_resolve_clip_without_resources_falls_back(hass, fake_sdk):
     """Resolve clip without resources falls back."""
     entry = await setup_media_source(hass)
     device = fake_sdk.systemManager.getDeviceById("cam1")
@@ -171,9 +161,7 @@ async def test_resolve_clip_without_resources_falls_back(
     assert play.mime_type == FORMAT_CONTENT_TYPE[HLS_PROVIDER]
 
 
-async def test_resolve_clip_ffmpeg_input_without_urls_unresolvable(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_resolve_clip_ffmpeg_input_without_urls_unresolvable(hass, fake_sdk):
     """Resolve clip ffmpeg input without urls unresolvable."""
     entry = await setup_media_source(hass)
     device = fake_sdk.systemManager.getDeviceById("cam1")
@@ -190,9 +178,7 @@ async def test_resolve_clip_ffmpeg_input_without_urls_unresolvable(
         )
 
 
-async def test_resolve_unknown_clip_unresolvable(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_resolve_unknown_clip_unresolvable(hass, fake_sdk):
     """Resolve unknown clip unresolvable."""
     entry = await setup_media_source(hass)
     day_id = dt_util.now().strftime("%Y-%m-%d")
@@ -202,7 +188,7 @@ async def test_resolve_unknown_clip_unresolvable(
         )
 
 
-async def test_browse_errors(hass, fake_sdk, enable_custom_integrations):
+async def test_browse_errors(hass, fake_sdk):
     """Browse errors."""
     entry = await setup_media_source(hass)
     device = fake_sdk.systemManager.getDeviceById("cam1")
@@ -230,7 +216,7 @@ async def test_browse_errors(hass, fake_sdk, enable_custom_integrations):
     entry.runtime_data.client.sdk = fake_sdk
 
 
-async def test_malformed_clip_skipped(hass, fake_sdk, enable_custom_integrations):
+async def test_malformed_clip_skipped(hass, fake_sdk):
     """Malformed clip skipped."""
     entry = await setup_media_source(hass)
     device = fake_sdk.systemManager.getDeviceById("cam1")
@@ -245,9 +231,7 @@ async def test_malformed_clip_skipped(hass, fake_sdk, enable_custom_integrations
     assert [c.identifier.rsplit("/", 1)[-1] for c in day.children] == ["ok"]
 
 
-async def test_browse_unknown_device_within_day(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_browse_unknown_device_within_day(hass, fake_sdk):
     """Browse unknown device within day."""
     entry = await setup_media_source(hass)
     day_id = dt_util.now().strftime("%Y-%m-%d")
@@ -257,7 +241,7 @@ async def test_browse_unknown_device_within_day(
         )
 
 
-async def test_browse_invalid_day(hass, fake_sdk, enable_custom_integrations):
+async def test_browse_invalid_day(hass, fake_sdk):
     """Browse invalid day."""
     entry = await setup_media_source(hass)
     with pytest.raises(BrowseError):
@@ -266,7 +250,7 @@ async def test_browse_invalid_day(hass, fake_sdk, enable_custom_integrations):
         )
 
 
-async def test_browse_unknown_entry(hass, fake_sdk, enable_custom_integrations):
+async def test_browse_unknown_entry(hass, fake_sdk):
     """Browse unknown entry."""
     await setup_media_source(hass)
     with pytest.raises(BrowseError):
@@ -275,7 +259,7 @@ async def test_browse_unknown_entry(hass, fake_sdk, enable_custom_integrations):
         )
 
 
-async def test_resolve_malformed_identifier(hass, fake_sdk, enable_custom_integrations):
+async def test_resolve_malformed_identifier(hass, fake_sdk):
     """Resolve malformed identifier."""
     entry = await setup_media_source(hass)
     with pytest.raises(media_source.Unresolvable):
@@ -284,18 +268,14 @@ async def test_resolve_malformed_identifier(hass, fake_sdk, enable_custom_integr
         )
 
 
-async def test_entry_token_missing_raises_browse_error(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_entry_token_missing_raises_browse_error(hass, fake_sdk):
     """Entry token missing raises browse error."""
     await setup_media_source(hass)
     with pytest.raises(BrowseError, match="missing"):
         _entry_token(hass, "missing")
 
 
-async def test_browse_root_with_multiple_entries_lists_entries(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_browse_root_with_multiple_entries_lists_entries(hass, fake_sdk):
     """Browse root with multiple entries lists entries."""
     entry1 = await setup_media_source(hass)
 

@@ -15,7 +15,7 @@ from custom_components.scrypted.const import SIGNAL_CONNECTION
 from tests.conftest import setup_entry
 
 
-async def test_camera_created(hass, fake_sdk, enable_custom_integrations):
+async def test_camera_created(hass, fake_sdk):
     """Camera created."""
     await setup_entry(hass)
     state = hass.states.get("camera.porch_front_door_cam")
@@ -23,7 +23,7 @@ async def test_camera_created(hass, fake_sdk, enable_custom_integrations):
     assert state.attributes["device_id"] == "cam1"
 
 
-async def test_camera_snapshot(hass, fake_sdk, enable_custom_integrations):
+async def test_camera_snapshot(hass, fake_sdk):
     """Camera snapshot."""
     await setup_entry(hass)
     image = await async_get_image(hass, "camera.porch_front_door_cam")
@@ -32,7 +32,7 @@ async def test_camera_snapshot(hass, fake_sdk, enable_custom_integrations):
     fake_sdk.systemManager.getDeviceById("cam1").takePicture.assert_awaited()
 
 
-async def test_camera_snapshot_sized(hass, fake_sdk, enable_custom_integrations):
+async def test_camera_snapshot_sized(hass, fake_sdk):
     """A sized request is resized by scrypted along a single axis.
 
     scrypted stretches to fit when given both width and height, so the hint
@@ -48,7 +48,7 @@ async def test_camera_snapshot_sized(hass, fake_sdk, enable_custom_integrations)
     assert take_picture.await_args.args[0]["picture"] == {"height": 360}
 
 
-async def test_camera_has_no_stream_support(hass, fake_sdk, enable_custom_integrations):
+async def test_camera_has_no_stream_support(hass, fake_sdk):
     """Live streaming is intentionally unsupported; NVR cards handle live view."""
     await setup_entry(hass)
     cam = get_camera_from_entity_id(hass, "camera.porch_front_door_cam")
@@ -57,7 +57,7 @@ async def test_camera_has_no_stream_support(hass, fake_sdk, enable_custom_integr
     assert cam._supports_native_async_webrtc is False
 
 
-async def test_camera_edge_cases(hass, fake_sdk, enable_custom_integrations):
+async def test_camera_edge_cases(hass, fake_sdk):
     """Camera edge cases."""
     await setup_entry(hass)
     cam = get_camera_from_entity_id(hass, "camera.porch_front_door_cam")
@@ -83,7 +83,7 @@ async def test_camera_edge_cases(hass, fake_sdk, enable_custom_integrations):
     assert await cam.async_camera_image() is None
 
 
-async def test_camera_updates_on_events(hass, fake_sdk, enable_custom_integrations):
+async def test_camera_updates_on_events(hass, fake_sdk):
     """Dispatcher signals push state writes through the base entity."""
     entry = await setup_entry(hass)
     assert hass.states.get("camera.porch_front_door_cam").state == "recording"
@@ -100,9 +100,7 @@ async def test_camera_updates_on_events(hass, fake_sdk, enable_custom_integratio
     assert hass.states.get("camera.porch_front_door_cam").state == "unavailable"
 
 
-async def test_snapshot_service_requests_a_fresh_frame(
-    hass, fake_sdk, enable_custom_integrations, tmp_path
-):
+async def test_snapshot_service_requests_a_fresh_frame(hass, fake_sdk, tmp_path):
     """camera.snapshot asks scrypted for an event capture, never a cached one."""
     await setup_entry(hass)
     hass.config.allowlist_external_dirs = {str(tmp_path)}
@@ -121,9 +119,7 @@ async def test_snapshot_service_requests_a_fresh_frame(
     )
 
 
-async def test_thumbnail_keeps_cache_friendly_request(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_thumbnail_keeps_cache_friendly_request(hass, fake_sdk):
     """A request with dimensions is a thumbnail refresh, where a recent image is fine.
 
     It is flagged periodic, so scrypted's snapshot plugin returns a recent

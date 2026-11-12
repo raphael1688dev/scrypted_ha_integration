@@ -5,9 +5,7 @@ from tests.conftest import setup_entry
 TYPES = ["Camera", "Doorbell", "Fan"]
 
 
-async def test_fan_discovered_with_speed_and_presets(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_fan_discovered_with_speed_and_presets(hass, fake_sdk):
     """Fan discovered with speed and presets."""
     await setup_entry(hass, device_types=TYPES)
     state = hass.states.get("fan.attic_fan")
@@ -18,7 +16,7 @@ async def test_fan_discovered_with_speed_and_presets(
     assert state.attributes["preset_mode"] == "Manual"
 
 
-async def test_fan_commands(hass, fake_sdk, enable_custom_integrations):
+async def test_fan_commands(hass, fake_sdk):
     """Fan commands."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("fan1")
@@ -62,7 +60,7 @@ async def test_fan_commands(hass, fake_sdk, enable_custom_integrations):
     device.setFan.assert_awaited_with({"mode": "Auto"})
 
 
-async def test_fan_turn_on_with_preset_mode(hass, fake_sdk, enable_custom_integrations):
+async def test_fan_turn_on_with_preset_mode(hass, fake_sdk):
     """turn_on with a preset_mode argument sets the mode without forcing a speed."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("fan1")
@@ -76,7 +74,7 @@ async def test_fan_turn_on_with_preset_mode(hass, fake_sdk, enable_custom_integr
     device.setFan.assert_awaited_with({"mode": "Auto"})
 
 
-async def test_fan_turn_on_with_percentage(hass, fake_sdk, enable_custom_integrations):
+async def test_fan_turn_on_with_percentage(hass, fake_sdk):
     """turn_on with a percentage argument sets the speed directly."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("fan1")
@@ -90,9 +88,7 @@ async def test_fan_turn_on_with_percentage(hass, fake_sdk, enable_custom_integra
     device.setFan.assert_awaited_with({"speed": 1})
 
 
-async def test_fan_percentage_clamped_when_maxspeed_missing(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_fan_percentage_clamped_when_maxspeed_missing(hass, fake_sdk):
     """A pushed FanStatus missing maxSpeed (defaults to 1) must not exceed 100%."""
     await setup_entry(hass, device_types=TYPES)
 
@@ -104,9 +100,7 @@ async def test_fan_percentage_clamped_when_maxspeed_missing(
     assert state.attributes["percentage"] == 100
 
 
-async def test_fan_turn_on_remembers_speed_from_push_update(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_fan_turn_on_remembers_speed_from_push_update(hass, fake_sdk):
     """A push update carrying a non-zero speed is remembered for turn_on."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("fan1")

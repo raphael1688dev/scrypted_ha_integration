@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from homeassistant.const import CONF_HOST
 from homeassistant.exceptions import HomeAssistantError
@@ -110,9 +110,7 @@ def test_object_detector_plumbing_stays_hidden(fake_sdk):
     assert not device_matches(make_client(fake_sdk), "ffmpeg1", "VideoFrameGenerator")
 
 
-async def test_smart_motion_sensor_gets_a_motion_entity(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_smart_motion_sensor_gets_a_motion_entity(hass, fake_sdk):
     """With default options a Smart Motion Sensor becomes a motion binary sensor."""
     add_smart_sensor(fake_sdk)
     await setup_entry(hass, device_types=DEFAULT_DEVICE_TYPES)
@@ -184,9 +182,7 @@ def test_entity_handles_missing_device_and_values(fake_sdk):
     assert entity.device is None
 
 
-async def test_ha_imported_devices_are_excluded(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_ha_imported_devices_are_excluded(hass, fake_sdk):
     """Devices provided by @scrypted/homeassistant never round-trip into HA."""
     await setup_entry(hass)
     # haimport1 has VideoCamera + allowlisted type, but must produce nothing
@@ -195,9 +191,7 @@ async def test_ha_imported_devices_are_excluded(
     ]
 
 
-async def test_setup_scrypted_platform_dedups_and_discovers_new(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_setup_scrypted_platform_dedups_and_discovers_new(hass, fake_sdk):
     """Setup scrypted platform dedups and discovers new."""
     entry = await setup_entry(hass)
     added: list = []
@@ -224,14 +218,14 @@ async def test_setup_scrypted_platform_dedups_and_discovers_new(
     assert len(added) == 1  # same uid still suppressed
 
 
-async def test_setup_scrypted_platform_no_client(hass, enable_custom_integrations):
+async def test_setup_scrypted_platform_no_client(hass):
     """Setup scrypted platform no client."""
     entry = SimpleNamespace(runtime_data=SimpleNamespace(client=None))
     await async_setup_scrypted_platform(hass, entry, lambda _: None, lambda d: [])
     # no exception is the assertion
 
 
-async def test_device_command_wraps_errors(hass, fake_sdk, enable_custom_integrations):
+async def test_device_command_wraps_errors(hass, fake_sdk):
     """Device command wraps errors."""
     entry = await setup_entry(hass)
     client = entry.runtime_data.client
@@ -257,9 +251,7 @@ async def test_device_command_wraps_errors(hass, fake_sdk, enable_custom_integra
         await entity._async_device_command("takePicture")
 
 
-async def test_new_device_while_disconnected_does_not_raise(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_new_device_while_disconnected_does_not_raise(hass, fake_sdk):
     """A new-device signal arriving after the SDK dropped is ignored quietly."""
     entry = await setup_entry(
         hass,
@@ -301,9 +293,7 @@ async def test_remove_device_without_runtime_data(hass, fake_sdk):
     assert await scrypted.async_remove_config_entry_device(hass, entry, device_entry)
 
 
-async def test_device_entities_are_grouped_under_the_hub(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_device_entities_are_grouped_under_the_hub(hass, fake_sdk):
     """Each scrypted device links to the hub device representing the server."""
     entry = await setup_entry(hass)
     registry = dr.async_get(hass)
@@ -320,9 +310,7 @@ async def test_device_entities_are_grouped_under_the_hub(
     assert cam.via_device_id == hub.id
 
 
-async def test_setup_does_not_use_deprecated_via_device(
-    hass, fake_sdk, enable_custom_integrations, caplog
-):
+async def test_setup_does_not_use_deprecated_via_device(hass, fake_sdk, caplog):
     """Regression for #63: link devices by registry id, not identifier tuple."""
     await setup_entry(hass)
 

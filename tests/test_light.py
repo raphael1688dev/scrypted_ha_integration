@@ -7,9 +7,7 @@ from tests.conftest import setup_entry
 TYPES = ["Camera", "Doorbell", "Light"]
 
 
-async def test_light_discovered_with_modes_and_range(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_light_discovered_with_modes_and_range(hass, fake_sdk):
     """Light discovered with modes and range."""
     await setup_entry(hass, device_types=TYPES)
     state = hass.states.get("light.desk_light")
@@ -20,9 +18,7 @@ async def test_light_discovered_with_modes_and_range(
     assert state.attributes["min_color_temp_kelvin"] == 2000
 
 
-async def test_light_state_attributes_when_on(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_light_state_attributes_when_on(hass, fake_sdk):
     """Light state attributes when on."""
     await setup_entry(hass, device_types=TYPES)
     fake_sdk.systemManager.set_property("light1", "on", True)
@@ -49,7 +45,7 @@ async def test_light_state_attributes_when_on(
     assert state.attributes["color_mode"] == "color_temp"
 
 
-async def test_light_commands(hass, fake_sdk, enable_custom_integrations):
+async def test_light_commands(hass, fake_sdk):
     """Light commands."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("light1")
@@ -78,9 +74,7 @@ async def test_light_commands(hass, fake_sdk, enable_custom_integrations):
     device.turnOff.assert_awaited_once()
 
 
-async def test_onoff_only_light_and_kelvin_failure(
-    hass, fake_sdk, system_state, enable_custom_integrations
-):
+async def test_onoff_only_light_and_kelvin_failure(hass, fake_sdk, system_state):
     """Onoff only light and kelvin failure."""
     system_state["light2"] = copy.deepcopy(system_state["light1"])
     system_state["light2"]["name"] = {"value": "Plain Bulb"}
@@ -97,9 +91,7 @@ async def test_onoff_only_light_and_kelvin_failure(
     assert desk is not None
 
 
-async def test_rgb_light_color_mode_and_command(
-    hass, fake_sdk, system_state, enable_custom_integrations
-):
+async def test_rgb_light_color_mode_and_command(hass, fake_sdk, system_state):
     """Rgb light color mode and command."""
     system_state["light3"] = copy.deepcopy(system_state["light1"])
     system_state["light3"]["name"] = {"value": "Rgb Strip"}
@@ -133,9 +125,7 @@ async def test_rgb_light_color_mode_and_command(
     assert state.attributes["rgb_color"] is None
 
 
-async def test_rgb_and_temp_light_color_mode(
-    hass, fake_sdk, system_state, enable_custom_integrations
-):
+async def test_rgb_and_temp_light_color_mode(hass, fake_sdk, system_state):
     """A light with both ColorSettingRgb and ColorSettingTemperature (no Hsv)."""
     system_state["light4"] = copy.deepcopy(system_state["light1"])
     system_state["light4"]["name"] = {"value": "Rgb Temp Strip"}

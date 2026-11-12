@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from homeassistant import config_entries
 from homeassistant.const import (
@@ -399,9 +399,7 @@ def _excluded_plugins_field(result):
     raise AssertionError("excluded_plugins field missing")
 
 
-async def test_options_flow_lists_plugins_from_live_server(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_options_flow_lists_plugins_from_live_server(hass, fake_sdk):
     """The plugin choices are live plugins that own user-facing devices."""
     devices = {
         # Owns a user-facing device: offered, labelled by its plugin device.
