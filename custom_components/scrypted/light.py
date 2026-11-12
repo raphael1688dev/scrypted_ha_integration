@@ -44,6 +44,10 @@ LIGHT = ScryptedLightDescription(
 )
 
 
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -91,6 +95,10 @@ class ScryptedLight(ScryptedDeviceEntity, LightEntity):
                 else {ColorMode.ONOFF}
             )
         self._attr_supported_color_modes = modes
+
+    # Declared here as well: Home Assistant only treats async_added_to_hass as
+    # entity_id-change safe when the overriding class carries the hook itself.
+    async_entity_id_changed = ScryptedDeviceEntity.async_entity_id_changed
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to updates and fetch the color temperature range."""

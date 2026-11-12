@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "switch": {
+      "notifications": {
+        "default": "mdi:bell"
+      }
+    }
+  }
+}

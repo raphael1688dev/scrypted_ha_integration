@@ -239,6 +239,14 @@ class ScryptedDeviceEntity(Entity):
         )
 
     @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep the entity in place when its entity_id changes.
+
+        Nothing registered in async_added_to_hass depends on the entity_id:
+        every subscription is keyed by the config entry and scrypted device id.
+        """
+
+    @callback
     def _async_listen_detections(self, handler: Callable[[dict], None]) -> None:
         """Route the device's ObjectsDetected payloads to handler until removal."""
         self.async_on_remove(
@@ -262,12 +270,22 @@ class ScryptedDeviceEntity(Entity):
         """Invoke a DeviceProxy RPC, surfacing failures as service-call errors."""
         device = self.device
         if device is None:
-            raise HomeAssistantError(f"Scrypted device {self.device_id} is unavailable")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_unavailable",
+                translation_placeholders={"device": self.device_id},
+            )
         try:
             return await getattr(device, method)(*args)
         except HomeAssistantError:
             raise
         except Exception as err:
             raise HomeAssistantError(
-                f"{method} failed for {self.entity_id}: {err}"
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={
+                    "method": method,
+                    "entity": self.entity_id,
+                    "error": str(err),
+                },
             ) from err

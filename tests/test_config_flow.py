@@ -52,8 +52,7 @@ async def test_user_flow_creates_entry(hass):
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["title"] == USER_INPUT[CONF_HOST]
     assert result["data"][CONF_AUTO_REGISTER_RESOURCES] is True
-    # Entry setup schedules a reload while migrating options; let it finish so
-    # the test does not leave a lingering task behind.
+    # Let the new entry finish setting up before the test tears down.
     await hass.async_block_till_done()
 
 
@@ -71,19 +70,27 @@ async def test_user_flow_invalid_credentials_shows_error(
     assert result["errors"]["base"] == "invalid_host_or_credentials"
 
 
+async def test_user_flow_unreachable_host_shows_error(
+    hass, mock_retrieve_token_client_error
+):
+    """A host that cannot be reached is a form error, not an unhandled exception."""
+    init_result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        init_result["flow_id"], USER_INPUT
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"]["base"] == "invalid_host_or_credentials"
+
+
 async def test_reauth_credentials_invalid_sets_error(hass, mock_retrieve_token_error):
     """Test case for test_reauth_credentials_invalid_sets_error."""
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: EXAMPLE_HOST})
-    entry.add_to_hass(hass)
-    context_data = {**entry.data, CONF_PASSWORD: "old"}
-    init_result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": config_entries.SOURCE_REAUTH,
-            "entry_id": entry.entry_id,
-            "data": context_data,
-        },
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: EXAMPLE_HOST, CONF_PASSWORD: "old"}
     )
+    entry.add_to_hass(hass)
+    init_result = await entry.start_reauth_flow(hass)
     result = await hass.config_entries.flow.async_configure(
         init_result["flow_id"], CREDENTIALS_INPUT
     )
@@ -91,23 +98,15 @@ async def test_reauth_credentials_invalid_sets_error(hass, mock_retrieve_token_e
     assert result["errors"]["base"] == "invalid_host_or_credentials"
 
 
-async def test_reauth_upgrade_defaults_from_context_options(hass):
-    """Test case for test_reauth_upgrade_defaults_from_context_options."""
+async def test_reauth_upgrade_defaults_from_entry_options(hass):
+    """The upgrade form starts from the options the entry already has."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_HOST: EXAMPLE_HOST},
         options={CONF_AUTO_REGISTER_RESOURCES: True},
     )
     entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": config_entries.SOURCE_REAUTH,
-            "entry_id": entry.entry_id,
-            "data": entry.data,
-            "options": dict(entry.options),
-        },
-    )
+    result = await entry.start_reauth_flow(hass)
     schema_keys = list(result["data_schema"].schema.keys())
     auto_field = next(
         key for key in schema_keys if key.schema == CONF_AUTO_REGISTER_RESOURCES
@@ -119,43 +118,60 @@ async def test_reauth_without_password_shows_upgrade_step(hass):
     """Test case for test_reauth_without_password_shows_upgrade_step."""
     entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: EXAMPLE_HOST})
     entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": config_entries.SOURCE_REAUTH,
-            "entry_id": entry.entry_id,
-            "data": entry.data,
-        },
-    )
+    result = await entry.start_reauth_flow(hass)
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "upgrade"
 
 
 async def test_reauth_credentials_triggers_reload(hass, mock_async_reload):
     """Test case for test_reauth_credentials_triggers_reload."""
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: EXAMPLE_HOST})
-    entry.add_to_hass(hass)
-    context_data = {**entry.data, CONF_PASSWORD: "old"}
-    init_result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": config_entries.SOURCE_REAUTH,
-            "entry_id": entry.entry_id,
-            "data": context_data,
-        },
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: EXAMPLE_HOST, CONF_PASSWORD: "old"}
     )
+    entry.add_to_hass(hass)
+    init_result = await entry.start_reauth_flow(hass)
     assert init_result["step_id"] == "credentials"
     result = await hass.config_entries.flow.async_configure(
         init_result["flow_id"], CREDENTIALS_INPUT
     )
+    await hass.async_block_till_done()
     assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "success"
+    assert result["reason"] == "reauth_successful"
+    assert entry.data == CREDENTIALS_INPUT
+    assert entry.unique_id == EXAMPLE_HOST
+    # Exactly one reload: the flow's own, with no update listener adding another.
+    mock_async_reload.assert_awaited_once_with(entry.entry_id)
+
+
+async def test_reconfigure_updates_entry(hass, mock_async_reload):
+    """Reconfigure rewrites the connection details and reloads once."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={**CREDENTIALS_INPUT, CONF_HOST: "old-host"},
+        options={CONF_ENABLE_ENTITIES: False},
+        unique_id="old_host",
+    )
+    entry.add_to_hass(hass)
+    init_result = await entry.start_reconfigure_flow(hass)
+    assert init_result["type"] == FlowResultType.FORM
+    assert init_result["step_id"] == "reconfigure"
+    result = await hass.config_entries.flow.async_configure(
+        init_result["flow_id"], CREDENTIALS_INPUT
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_HOST] == EXAMPLE_HOST
+    assert entry.unique_id == EXAMPLE_HOST
+    assert entry.options[CONF_ENABLE_ENTITIES] is False
     mock_async_reload.assert_awaited_once_with(entry.entry_id)
 
 
 async def test_reauth_duplicate_host_sets_error(hass):
     """Test case for test_reauth_duplicate_host_sets_error."""
-    current = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: "current"})
+    current = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: "current", CONF_PASSWORD: "old"}
+    )
     existing = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_HOST: EXAMPLE_HOST},
@@ -163,20 +179,12 @@ async def test_reauth_duplicate_host_sets_error(hass):
     )
     current.add_to_hass(hass)
     existing.add_to_hass(hass)
-    context_data = {**current.data, CONF_PASSWORD: "old"}
-    init_result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": config_entries.SOURCE_REAUTH,
-            "entry_id": current.entry_id,
-            "data": context_data,
-        },
-    )
+    init_result = await current.start_reauth_flow(hass)
     result = await hass.config_entries.flow.async_configure(
         init_result["flow_id"], CREDENTIALS_INPUT
     )
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"][CONF_NAME] == "already_configured"
+    assert result["errors"][CONF_HOST] == "already_configured"
 
 
 async def test_options_flow_updates_entry(hass):
@@ -324,11 +332,11 @@ async def test_options_flow_includes_enable_entities(hass):
     assert result["data"][CONF_ENABLE_ENTITIES] is False
 
 
-async def test_reauth_preserves_entity_options(hass):
+async def test_reauth_preserves_entity_options(hass, mock_async_reload):
     """Reauth keeps options its form never collects."""
     entry = MockConfigEntry(
         domain=DOMAIN,
-        data={CONF_HOST: EXAMPLE_HOST},
+        data={CONF_HOST: EXAMPLE_HOST, CONF_PASSWORD: "old"},
         options={
             CONF_AUTO_REGISTER_RESOURCES: False,
             CONF_SCRYPTED_NVR: False,
@@ -338,14 +346,7 @@ async def test_reauth_preserves_entity_options(hass):
     )
     entry.add_to_hass(hass)
 
-    init_result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": config_entries.SOURCE_REAUTH,
-            "entry_id": entry.entry_id,
-            "data": {**entry.data, CONF_PASSWORD: "old"},
-        },
-    )
+    init_result = await entry.start_reauth_flow(hass)
     result = await hass.config_entries.flow.async_configure(
         init_result["flow_id"], CREDENTIALS_INPUT
     )
@@ -356,7 +357,9 @@ async def test_reauth_preserves_entity_options(hass):
     assert entry.options[CONF_ENABLE_ENTITIES] is False
 
 
-async def test_upgrade_step_applies_its_own_fields_and_keeps_the_rest(hass):
+async def test_upgrade_step_applies_its_own_fields_and_keeps_the_rest(
+    hass, mock_async_reload
+):
     """The upgrade form's own fields win; entity options survive."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -370,14 +373,7 @@ async def test_upgrade_step_applies_its_own_fields_and_keeps_the_rest(hass):
     )
     entry.add_to_hass(hass)
 
-    init_result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": config_entries.SOURCE_REAUTH,
-            "entry_id": entry.entry_id,
-            "data": entry.data,
-        },
-    )
+    init_result = await entry.start_reauth_flow(hass)
     assert init_result["step_id"] == "upgrade"
     result = await hass.config_entries.flow.async_configure(
         init_result["flow_id"], USER_INPUT
@@ -385,9 +381,11 @@ async def test_upgrade_step_applies_its_own_fields_and_keeps_the_rest(hass):
     await hass.async_block_till_done()
 
     assert result["type"] == FlowResultType.ABORT
-    # USER_INPUT turns both of these on.
+    # USER_INPUT turns both of these on; they are options, never entry data.
     assert entry.options[CONF_SCRYPTED_NVR] is True
     assert entry.options[CONF_AUTO_REGISTER_RESOURCES] is True
+    assert CONF_SCRYPTED_NVR not in entry.data
+    assert CONF_AUTO_REGISTER_RESOURCES not in entry.data
     # Untouched by this form.
     assert entry.options[CONF_ENABLE_ENTITIES] is False
     assert entry.options["device_types"] == ["Camera", "Doorbell", "Sensor"]

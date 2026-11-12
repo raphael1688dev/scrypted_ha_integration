@@ -2,7 +2,6 @@
 
 import asyncio
 from collections.abc import Iterable
-from functools import lru_cache
 from ipaddress import ip_address
 import logging
 from pathlib import Path
@@ -39,7 +38,7 @@ async def retrieve_token(data: dict[str, Any], session: aiohttp.ClientSession) -
     host = data[CONF_HOST]
     ipport = host.split(":")
     if len(ipport) > 2:
-        raise Exception("invalid Scrypted host")
+        raise ValueError("invalid Scrypted host")
     ip = ipport[0]
     if len(ipport) == 2:
         port = ipport[1]
@@ -52,9 +51,12 @@ async def retrieve_token(data: dict[str, Any], session: aiohttp.ClientSession) -
         headers={"authorization": aiohttp.encode_basic_auth(username, password)},
         json={"username": username},
         raise_for_status=True,
-        verify_ssl=False,
+        ssl=False,
     )
-    resp_json = await resp.json()
+    try:
+        resp_json = await resp.json()
+    finally:
+        resp.release()
     if "token" not in resp_json:
         raise ValueError("No token in response")
 
@@ -92,7 +94,6 @@ class ScryptedView(HomeAssistantView):
             lambda: self.entrypoint_html.set_result(entrypoint_html)
         )
 
-    @lru_cache
     def _create_url(self, token: str, path: str) -> str:
         """Create URL to service."""
         entry: ConfigEntry = self.hass.data[DOMAIN][token]
@@ -220,7 +221,7 @@ class ScryptedView(HomeAssistantView):
         # Start proxy
         async with self._session.ws_connect(
             url,
-            verify_ssl=False,
+            ssl=False,
             headers=source_header,
             protocols=req_protocols,
             autoclose=False,
@@ -249,7 +250,7 @@ class ScryptedView(HomeAssistantView):
         async with self._session.request(
             request.method,
             url,
-            verify_ssl=False,
+            ssl=False,
             headers=source_header,
             params=request.query,
             allow_redirects=False,

@@ -28,11 +28,16 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .const import DOMAIN
 from .entity import ScryptedDeviceEntity, async_setup_scrypted_platform, device_matches
 
 _LOGGER = logging.getLogger(__name__)
 
-SPEAKER_DESCRIPTION = EntityDescription(key="speaker", name="Speaker")
+SPEAKER_DESCRIPTION = EntityDescription(key="speaker", translation_key="speaker")
+
+
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -76,7 +81,9 @@ class ScryptedIntercom(ScryptedDeviceEntity, MediaPlayerEntity):
         device = self.device
         if device is None or not self.client.sdk:
             raise HomeAssistantError(
-                f"Scrypted device for {self.entity_id} is unavailable"
+                translation_domain=DOMAIN,
+                translation_key="device_unavailable",
+                translation_placeholders={"device": self.entity_id},
             )
         if media_source.is_media_source_id(media_id):
             play_item = await media_source.async_resolve_media(

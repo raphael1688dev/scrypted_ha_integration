@@ -25,14 +25,18 @@ from .entity import (
 
 OBJECT_DETECTED = EventEntityDescription(
     key="object_detected",
-    name="Object detected",
+    translation_key="object_detected",
     device_class=EventDeviceClass.MOTION,
 )
 DOORBELL = EventEntityDescription(
     key="doorbell",
-    name="Doorbell",
+    translation_key="doorbell",
     device_class=EventDeviceClass.DOORBELL,
 )
+
+
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -78,6 +82,10 @@ class ScryptedObjectDetectionEvent(ScryptedDeviceEntity, EventEntity):
         """Initialize the object detection event entity."""
         super().__init__(client, entry, device_id, description)
         self._attr_event_types: list[str] = event_types
+
+    # Declared here as well: Home Assistant only treats async_added_to_hass as
+    # entity_id-change safe when the overriding class carries the hook itself.
+    async_entity_id_changed = ScryptedDeviceEntity.async_entity_id_changed
 
     async def async_added_to_hass(self) -> None:
         """Receive the device's detections."""

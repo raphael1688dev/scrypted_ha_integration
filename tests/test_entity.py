@@ -13,7 +13,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity import EntityDescription
 
 from custom_components import scrypted
-from custom_components.scrypted import ScryptedRuntimeData
+from custom_components.scrypted import ScryptedRuntimeData, binary_sensor, event, light
 from custom_components.scrypted.const import (
     DEFAULT_DEVICE_TYPES,
     DOMAIN,
@@ -327,3 +327,24 @@ async def test_setup_does_not_use_deprecated_via_device(
     await setup_entry(hass)
 
     assert "deprecated `via_device`" not in caplog.text
+
+
+def test_entity_id_change_hook_is_declared_beside_every_add_hook():
+    """Classes overriding async_added_to_hass carry async_entity_id_changed too.
+
+    Home Assistant removes and re-adds an entity on an entity_id change unless
+    the class that overrides async_added_to_hass (or a subclass) defines it.
+    """
+    classes = (
+        ScryptedDeviceEntity,
+        binary_sensor.ScryptedObjectDetectedSensor,
+        event.ScryptedObjectDetectionEvent,
+        light.ScryptedLight,
+    )
+    for cls in classes:
+        assert "async_added_to_hass" in cls.__dict__
+        assert "async_entity_id_changed" in cls.__dict__
+    assert (
+        ScryptedDeviceEntity.async_entity_id_changed(SimpleNamespace(), "old.id")
+        is None
+    )

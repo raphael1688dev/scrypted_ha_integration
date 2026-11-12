@@ -174,7 +174,6 @@ async def test_view_attributes(scrypted_view):
 async def test_create_url_builds_https_urls(hass, scrypted_view, host, path, expected):
     """Ensure _create_url applies default port and quoting rules."""
     _register_entry(hass, host=host)
-    scrypted_view._create_url.cache_clear()
 
     assert scrypted_view._create_url(TOKEN, path) == expected
 
@@ -182,7 +181,6 @@ async def test_create_url_builds_https_urls(hass, scrypted_view, host, path, exp
 async def test_create_url_invalid_host(hass, scrypted_view):
     """Test URL creation fails for invalid host."""
     _register_entry(hass, host=f"{HOST_WITH_PORT}:extra")
-    scrypted_view._create_url.cache_clear()
 
     with pytest.raises(Exception, match="invalid Scrypted host"):
         scrypted_view._create_url(TOKEN, "path")
@@ -191,7 +189,6 @@ async def test_create_url_invalid_host(hass, scrypted_view):
 async def test_create_url_raises_on_invalid_url(hass, scrypted_view):
     """Test _create_url raises HTTPBadRequest for malformed URLs."""
     _register_entry(hass)
-    scrypted_view._create_url.cache_clear()
 
     with patch(
         "custom_components.scrypted.http.URL", side_effect=ValueError("invalid")
@@ -203,7 +200,6 @@ async def test_create_url_raises_on_invalid_url(hass, scrypted_view):
 async def test_create_url_rejects_path_outside_base(hass, scrypted_view):
     """Test _create_url rejects paths that don't stay within base path."""
     _register_entry(hass)
-    scrypted_view._create_url.cache_clear()
 
     fake_url = SimpleNamespace(path="badpath")
     with patch("custom_components.scrypted.http.URL", return_value=fake_url):

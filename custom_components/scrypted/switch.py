@@ -53,13 +53,16 @@ SWITCH_DESCRIPTIONS: dict[str, ScryptedSwitchDescription] = {
     # to mute that app's push notifications.
     "Notifier": ScryptedSwitchDescription(
         key="notifications",
-        name="Notifications",
-        icon="mdi:bell",
+        translation_key="notifications",
         entity_category=EntityCategory.CONFIG,
         interface=ScryptedInterface.OnOff.value,
         state_property="on",
     ),
 }
+
+
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(

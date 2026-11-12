@@ -130,8 +130,9 @@ async def test_app_notifier_gets_notifications_switch(
     state_obj = hass.states.get(NOTIFIER_ENTITY)
     assert state_obj is not None
     assert state_obj.state == "on"
-    assert state_obj.attributes["icon"] == "mdi:bell"
     entity = er.async_get(hass).async_get(NOTIFIER_ENTITY)
+    # The bell icon comes from icons.json through this key.
+    assert entity.translation_key == "notifications"
     assert entity.entity_category is EntityCategory.CONFIG
 
     device = fake_sdk.systemManager.getDeviceById("notifier1")

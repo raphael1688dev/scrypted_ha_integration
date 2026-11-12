@@ -42,7 +42,7 @@ class ScryptedSensorDescription(
 SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ScryptedSensorDescription(
         key="temperature",
-        name="Temperature",
+        translation_key="temperature",
         interface="Thermometer",
         state_property="temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -51,7 +51,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="humidity",
-        name="Humidity",
+        translation_key="humidity",
         interface="HumiditySensor",
         state_property="humidity",
         device_class=SensorDeviceClass.HUMIDITY,
@@ -60,7 +60,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="battery",
-        name="Battery",
+        translation_key="battery",
         interface="Battery",
         state_property="batteryLevel",
         device_class=SensorDeviceClass.BATTERY,
@@ -70,7 +70,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="ambient_light",
-        name="Ambient light",
+        translation_key="ambient_light",
         interface="AmbientLightSensor",
         state_property="ambientLight",
         device_class=SensorDeviceClass.ILLUMINANCE,
@@ -79,7 +79,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="luminance",
-        name="Luminance",
+        translation_key="luminance",
         interface="LuminanceSensor",
         state_property="luminance",
         device_class=SensorDeviceClass.ILLUMINANCE,
@@ -88,14 +88,14 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="ultraviolet",
-        name="UV index",
+        translation_key="ultraviolet",
         interface="UltravioletSensor",
         state_property="ultraviolet",
         state_class=SensorStateClass.MEASUREMENT,
     ),
     ScryptedSensorDescription(
         key="co2",
-        name="CO2",
+        translation_key="co2",
         interface="CO2Sensor",
         state_property="co2ppm",
         device_class=SensorDeviceClass.CO2,
@@ -104,7 +104,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="pm25",
-        name="PM2.5",
+        translation_key="pm25",
         interface="PM25Sensor",
         state_property="pm25Density",
         device_class=SensorDeviceClass.PM25,
@@ -113,7 +113,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="pm10",
-        name="PM10",
+        translation_key="pm10",
         interface="PM10Sensor",
         state_property="pm10Density",
         device_class=SensorDeviceClass.PM10,
@@ -122,7 +122,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="voc",
-        name="VOC",
+        translation_key="voc",
         interface="VOCSensor",
         state_property="vocDensity",
         device_class=SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS,
@@ -131,7 +131,7 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="nox",
-        name="NOx",
+        translation_key="nox",
         interface="NOXSensor",
         state_property="noxDensity",
         native_unit_of_measurement=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
@@ -139,13 +139,17 @@ SENSORS: tuple[ScryptedSensorDescription, ...] = (
     ),
     ScryptedSensorDescription(
         key="air_quality",
-        name="Air quality",
+        translation_key="air_quality",
         interface="AirQualitySensor",
         state_property="airQuality",
         device_class=SensorDeviceClass.ENUM,
         options=["Excellent", "Good", "Fair", "Inferior", "Poor", "Unknown"],
     ),
 )
+
+
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(

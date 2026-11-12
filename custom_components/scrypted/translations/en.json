@@ -1,46 +1,58 @@
 {
   "config": {
-    "abort": {
-      "success": "Your config entry was successfully updated"
-    },
     "error": {
-      "already_configured": "Each Scrypted entry needs a unique name.",
+      "already_configured": "This Scrypted host is already configured.",
       "invalid_host_or_credentials": "Unable to login to Scrypted server, either host or credentials are invalid."
     },
+    "abort": {
+      "already_configured": "This Scrypted host is already configured.",
+      "reauth_successful": "Your Scrypted credentials were updated.",
+      "reconfigure_successful": "Your Scrypted connection was updated."
+    },
     "step": {
+      "user": {
+        "description": "Enter your Scrypted server details (you must use an HTTPS endpoint) as well as a name and icon to use for the new panel on the UI.\n\nHost examples:\n- `192.168.1.124`\n- `192.168.1.124:10443`",
+        "data": {
+          "host": "Host",
+          "icon": "Icon",
+          "name": "Name",
+          "password": "Password",
+          "username": "Username",
+          "scrypted_nvr": "Replace Scrypted Management Console sidebar with Scrypted NVR sidebar. Requires Scrypted NVR.",
+          "auto_register_resources": "Automatically register Lovelace resources for the Scrypted NVR cards. Requires Scrypted NVR and recommended if so."
+        }
+      },
+      "upgrade": {
+        "description": "Once you enter your credentials, your config entry will now automatically set up a panel for you in the UI with the specified name and icon. Once this is complete, you can remove the `panel_iframe` in your configuration.yaml if you created one for this entry. If your credentials don't work, validate that the server host is an HTTPS endpoint and that your credentials are correct.",
+        "data": {
+          "host": "Host",
+          "icon": "Icon",
+          "name": "Name",
+          "password": "Password",
+          "username": "Username",
+          "scrypted_nvr": "Replace Scrypted Management Console sidebar with Scrypted NVR sidebar. Requires Scrypted NVR.",
+          "auto_register_resources": "Automatically register Lovelace resources for the Scrypted NVR cards. Requires Scrypted NVR and recommended if so."
+        }
+      },
       "credentials": {
+        "description": "The host/credentials combination is no longer working. Please update your host and/or credentials to continue.",
         "data": {
           "host": "Host",
           "icon": "Icon",
           "name": "Name",
           "password": "Password",
           "username": "Username"
-        },
-        "description": "The host/credentials combination is no longer working. Please update your host and/or credentials to continue."
+        }
       },
-      "upgrade": {
+      "reconfigure": {
+        "description": "Update the Scrypted server details (you must use an HTTPS endpoint), or the name and icon of its panel.",
         "data": {
           "host": "Host",
           "icon": "Icon",
           "name": "Name",
           "password": "Password",
-          "username": "Username",
-          "scrypted_nvr": "Replace Scrypted Management Console sidebar with Scrypted NVR sidebar. Requires Scrypted NVR.",
-          "auto_register_resources": "Automatically register Lovelace resources for the Scrypted NVR cards. Requires Scrypted NVR and recommended if so."
-        },
-        "description": "Once you enter your credentials, your config entry will now automatically set up a panel for you in the UI with the specified name and icon. Once this is complete, you can remove the `panel_iframe` in your configuration.yaml if you created one for this entry. If your credentials don't work, validate that the server host is an HTTPS endpoint and that your credentials are correct."
-      },
-      "user": {
-        "data": {
-          "host": "Host",
-          "icon": "Icon",
-          "name": "Name",
-          "password": "Password",
-          "username": "Username",
-          "scrypted_nvr": "Replace Scrypted Management Console sidebar with Scrypted NVR sidebar. Requires Scrypted NVR.",
-          "auto_register_resources": "Automatically register Lovelace resources for the Scrypted NVR cards. Requires Scrypted NVR and recommended if so."
-        },
-        "description": "Enter your Scrypted server details (you must use an HTTPS endpoint) as well as a name and icon to use for the new panel on the UI.\n\nHost examples:\n- `192.168.1.124`\n- `192.168.1.124:10443`"
+          "username": "Username"
+        }
       }
     }
   },
@@ -60,6 +72,115 @@
           "excluded_plugins": "Devices from these plugins never get entities, whatever their type. Use it for plugins that bridge devices Home Assistant already integrates. Excluding the object detection plugin also hides its smart sensors."
         }
       }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "motion": {
+        "name": "Motion"
+      },
+      "binary_state": {
+        "name": "Binary state"
+      },
+      "audio": {
+        "name": "Sound"
+      },
+      "occupancy": {
+        "name": "Occupancy"
+      },
+      "flooded": {
+        "name": "Flooded"
+      },
+      "entry_open": {
+        "name": "Entry open"
+      },
+      "power": {
+        "name": "Power"
+      },
+      "online": {
+        "name": "Online"
+      },
+      "tampered": {
+        "name": "Tampered"
+      },
+      "charging": {
+        "name": "Charging"
+      },
+      "sleeping": {
+        "name": "Sleeping"
+      },
+      "object_class_detected": {
+        "name": "{class_name} detected"
+      }
+    },
+    "button": {
+      "restart": {
+        "name": "Restart"
+      }
+    },
+    "event": {
+      "object_detected": {
+        "name": "Object detected"
+      },
+      "doorbell": {
+        "name": "Doorbell"
+      }
+    },
+    "media_player": {
+      "speaker": {
+        "name": "Speaker"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "humidity": {
+        "name": "Humidity"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "ambient_light": {
+        "name": "Ambient light"
+      },
+      "luminance": {
+        "name": "Luminance"
+      },
+      "ultraviolet": {
+        "name": "UV index"
+      },
+      "co2": {
+        "name": "CO2"
+      },
+      "pm25": {
+        "name": "PM2.5"
+      },
+      "pm10": {
+        "name": "PM10"
+      },
+      "voc": {
+        "name": "VOC"
+      },
+      "nox": {
+        "name": "NOx"
+      },
+      "air_quality": {
+        "name": "Air quality"
+      }
+    },
+    "switch": {
+      "notifications": {
+        "name": "Notifications"
+      }
+    }
+  },
+  "exceptions": {
+    "device_unavailable": {
+      "message": "Scrypted device {device} is unavailable."
+    },
+    "command_failed": {
+      "message": "{method} failed for {entity}: {error}"
     }
   }
 }

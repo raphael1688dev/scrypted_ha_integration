@@ -42,41 +42,41 @@ class ScryptedBinarySensorDescription(
 BINARY_SENSORS: tuple[ScryptedBinarySensorDescription, ...] = (
     ScryptedBinarySensorDescription(
         key="motion",
-        name="Motion",
+        translation_key="motion",
         interface="MotionSensor",
         state_property="motionDetected",
         device_class=BinarySensorDeviceClass.MOTION,
     ),
     ScryptedBinarySensorDescription(
         key="binary_state",
-        name="Binary state",
+        translation_key="binary_state",
         interface="BinarySensor",
         state_property="binaryState",
     ),
     ScryptedBinarySensorDescription(
         key="audio",
-        name="Sound",
+        translation_key="audio",
         interface="AudioSensor",
         state_property="audioDetected",
         device_class=BinarySensorDeviceClass.SOUND,
     ),
     ScryptedBinarySensorDescription(
         key="occupancy",
-        name="Occupancy",
+        translation_key="occupancy",
         interface="OccupancySensor",
         state_property="occupied",
         device_class=BinarySensorDeviceClass.OCCUPANCY,
     ),
     ScryptedBinarySensorDescription(
         key="flooded",
-        name="Flooded",
+        translation_key="flooded",
         interface="FloodSensor",
         state_property="flooded",
         device_class=BinarySensorDeviceClass.MOISTURE,
     ),
     ScryptedBinarySensorDescription(
         key="entry_open",
-        name="Entry open",
+        translation_key="entry_open",
         interface="EntrySensor",
         state_property="entryOpen",
         device_class=BinarySensorDeviceClass.DOOR,
@@ -85,14 +85,14 @@ BINARY_SENSORS: tuple[ScryptedBinarySensorDescription, ...] = (
     ),
     ScryptedBinarySensorDescription(
         key="power",
-        name="Power",
+        translation_key="power",
         interface="PowerSensor",
         state_property="powerDetected",
         device_class=BinarySensorDeviceClass.POWER,
     ),
     ScryptedBinarySensorDescription(
         key="online",
-        name="Online",
+        translation_key="online",
         interface="Online",
         state_property="online",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
@@ -100,7 +100,7 @@ BINARY_SENSORS: tuple[ScryptedBinarySensorDescription, ...] = (
     ),
     ScryptedBinarySensorDescription(
         key="tampered",
-        name="Tampered",
+        translation_key="tampered",
         interface="TamperSensor",
         state_property="tampered",
         device_class=BinarySensorDeviceClass.TAMPER,
@@ -110,7 +110,7 @@ BINARY_SENSORS: tuple[ScryptedBinarySensorDescription, ...] = (
     ),
     ScryptedBinarySensorDescription(
         key="charging",
-        name="Charging",
+        translation_key="charging",
         interface="Charger",
         state_property="chargeState",
         device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
@@ -119,12 +119,16 @@ BINARY_SENSORS: tuple[ScryptedBinarySensorDescription, ...] = (
     ),
     ScryptedBinarySensorDescription(
         key="sleeping",
-        name="Sleeping",
+        translation_key="sleeping",
         interface="Sleep",
         state_property="sleeping",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
+
+
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -197,11 +201,16 @@ class ScryptedObjectDetectedSensor(ScryptedDeviceEntity, BinarySensorEntity):
             device_id,
             BinarySensorEntityDescription(
                 key=f"{class_name}_detected",
-                name=f"{class_name.capitalize()} detected",
+                translation_key="object_class_detected",
+                translation_placeholders={"class_name": class_name.capitalize()},
             ),
         )
         self._class_name = class_name
         self._cancel_clear: CALLBACK_TYPE | None = None
+
+    # Declared here as well: Home Assistant only treats async_added_to_hass as
+    # entity_id-change safe when the overriding class carries the hook itself.
+    async_entity_id_changed = ScryptedDeviceEntity.async_entity_id_changed
 
     async def async_added_to_hass(self) -> None:
         """Receive the device's detections."""

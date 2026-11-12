@@ -38,7 +38,7 @@ BUTTONS: tuple[ScryptedButtonDescription, ...] = (
     # offline, so it should not sit one tap away on every camera.
     ScryptedButtonDescription(
         key="restart",
-        name="Restart",
+        translation_key="restart",
         device_class=ButtonDeviceClass.RESTART,
         entity_category=EntityCategory.CONFIG,
         entity_registry_enabled_default=False,
@@ -46,6 +46,10 @@ BUTTONS: tuple[ScryptedButtonDescription, ...] = (
         method="reboot",
     ),
 )
+
+
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(

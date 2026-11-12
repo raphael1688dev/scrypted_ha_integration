@@ -32,6 +32,10 @@ CAMERA_DESCRIPTION = EntityDescription(key="camera", name=None)
 FRESH_PICTURE_TIMEOUT_MS = (CAMERA_IMAGE_TIMEOUT - 2) * 1000
 
 
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,

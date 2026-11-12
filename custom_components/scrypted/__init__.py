@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 import logging
-from typing import Any
 
 from aiohttp import ClientConnectorError, ClientResponseError
 from scrypted_sdk import ScryptedConnectionError
@@ -19,8 +18,7 @@ from homeassistant.components.lovelace.resources import (
     ResourceStorageCollection,
     ResourceYAMLCollection,
 )
-from homeassistant.components.persistent_notification import async_create
-from homeassistant.config_entries import SOURCE_IMPORT, SOURCE_REAUTH, ConfigEntry
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
     CONF_ICON,
@@ -30,8 +28,8 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
@@ -77,6 +75,7 @@ PLATFORMS = [
 ]
 
 _LOGGER = logging.getLogger(__name__)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _RESOURCE_TRACKER = f"{DOMAIN}_lovelace_resources"
 _OPTION_DEFAULTS = {
     CONF_AUTO_REGISTER_RESOURCES: False,
@@ -226,77 +225,41 @@ async def _async_unregister_lovelace_resource(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Auth setup."""
+    """Register the proxy view shared by every config entry."""
     session = async_get_clientsession(hass, verify_ssl=False)
     hass.http.register_view(ScryptedView(hass, session))
-
-    if DOMAIN in config:
-        async_create(
-            hass,
-            (
-                "Your Scrypted configuration has been imported as a config entry and "
-                "can safely be removed from your configuration.yaml."
-            ),
-            "Scrypted Config Import",
-        )
-        hass.async_create_task(
-            hass.config_entries.flow.async_init(
-                DOMAIN, context={"source": SOURCE_IMPORT}, data=config[DOMAIN]
-            )
-        )
-        return False
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up a Scrypted config entry."""
 
-    @callback
-    def _reauth(data: dict[str, Any]) -> bool:
-        """Start Reauth flow."""
-        payload = {**config_entry.data, **config_entry.options, **data}
-        hass.async_create_task(
-            hass.config_entries.flow.async_init(
-                DOMAIN,
-                context={
-                    "source": SOURCE_REAUTH,
-                    "entry_id": config_entry.entry_id,
-                    "data": payload,
-                    "options": dict(config_entry.options),
-                },
-            )
-        )
-        return False
-
     if not config_entry.data:
-        return _reauth(config_entry.options)
+        # Entries created before credentials were stored have nothing to log
+        # in with; the reauth flow collects them.
+        raise ConfigEntryAuthFailed("Scrypted credentials are missing")
 
-    changed = await _async_ensure_entry_options(hass, config_entry)
-    if changed:
-        hass.async_create_task(hass.config_entries.async_reload(config_entry.entry_id))
-        return False
+    # No listener reloads on this update: the entry is not loaded yet.
+    await _async_ensure_entry_options(hass, config_entry)
 
     session = async_get_clientsession(hass, verify_ssl=False)
     try:
-        if not (token := await retrieve_token(config_entry.data, session)):
-            return _reauth(config_entry.data)
-    except Exception as e:
-        if isinstance(e, ClientConnectorError):
-            raise ConfigEntryNotReady(
-                "ClientConnectorError. Is the Scrypted host down? Retrying."
-            )
-        if isinstance(e, ClientResponseError) and e.status in (401, 403):
-            _LOGGER.warning(
-                "Scrypted authentication failed (HTTP %s) for %s; starting reauth flow.",
-                e.status,
-                config_entry.title,
-            )
-            return _reauth(config_entry.data)
-        raise e
-
-    config_entry.async_on_unload(
-        config_entry.add_update_listener(_async_update_listener)
-    )
+        token = await retrieve_token(config_entry.data, session)
+    except ClientConnectorError as err:
+        raise ConfigEntryNotReady(
+            "ClientConnectorError. Is the Scrypted host down? Retrying."
+        ) from err
+    except ClientResponseError as err:
+        if err.status not in (401, 403):
+            raise
+        raise ConfigEntryAuthFailed(
+            f"Scrypted authentication failed (HTTP {err.status})"
+        ) from err
+    except ValueError as err:
+        # Scrypted answers a rejected login with 200 and no token.
+        raise ConfigEntryAuthFailed(str(err)) from err
+    if not token:
+        raise ConfigEntryAuthFailed("Scrypted returned an empty token")
 
     client: ScryptedClient | None = None
     hub_device_id: str | None = None
@@ -451,14 +414,6 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
         hass.data.pop(DOMAIN)
     async_remove_panel(hass, f"{DOMAIN}_{token}")
     return True
-
-
-async def _async_update_listener(
-    hass: HomeAssistant, config_entry: ConfigEntry
-) -> None:
-    """Ensure option keys stay in the options dict and reload on change."""
-    await _async_ensure_entry_options(hass, config_entry)
-    hass.async_create_task(hass.config_entries.async_reload(config_entry.entry_id))
 
 
 async def _async_ensure_entry_options(

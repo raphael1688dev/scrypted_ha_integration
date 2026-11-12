@@ -1,11 +1,14 @@
 """Config flow for Scrypted integration."""
 
+from collections.abc import Mapping
 from typing import Any
 
+from aiohttp import ClientError
 from scrypted_sdk import ScryptedDeviceType, ScryptedInterface
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlowResult
 from homeassistant.const import (
     CONF_HOST,
     CONF_ICON,
@@ -98,18 +101,15 @@ def text_selector(selector_type: TextSelectorType) -> TextSelector:
 
 
 def _get_config_schema(
-    default: dict[str, Any] | None,
+    default: Mapping[str, Any] | None,
     *,
-    auto_register_default: bool = False,
     include_nvr: bool = False,
     include_auto_register: bool = False,
 ) -> vol.Schema:
     """Get config schema."""
     if not default:
         default = {}
-    auto_register_value = default.get(
-        CONF_AUTO_REGISTER_RESOURCES, auto_register_default
-    )
+    auto_register_value = default.get(CONF_AUTO_REGISTER_RESOURCES, False)
     schema: dict[Any, Any] = {
         vol.Required(
             CONF_NAME, default=default.get(CONF_NAME, DOMAIN.title())
@@ -161,14 +161,16 @@ class ScryptedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return False
         try:
             await retrieve_token(data, session)
-        except ValueError:
+        except (ValueError, ClientError, TimeoutError):
+            # No token in the reply, a malformed host, or an unreachable or
+            # rejecting server: the form reports them all the same way.
             return False
 
         return True
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    ) -> ConfigFlowResult:
         """Handle user flow."""
         errors = {}
         if user_input is not None and CONF_USERNAME in user_input:
@@ -184,118 +186,110 @@ class ScryptedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=_get_config_schema(
                 user_input,
-                auto_register_default=self._async_auto_register_default(user_input),
                 include_nvr=True,
                 include_auto_register=True,
             ),
             errors=errors,
         )
 
-    async_step_import = async_step_user
-
     async def async_step_reauth(
-        self, _: dict[str, Any] | None
-    ) -> config_entries.FlowResult:
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
         """Handle reauth flow."""
-        if CONF_PASSWORD not in self.context["data"]:
+        if CONF_PASSWORD not in entry_data:
             return await self.async_step_upgrade()
         return await self.async_step_credentials()
 
-    async def _async_step_reauth(
+    async def _async_step_update_entry(
         self, step_id: str, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
-        """Handle reauth step."""
+    ) -> ConfigFlowResult:
+        """Show a form that rewrites the existing entry (reauth or reconfigure)."""
         errors = {}
+        config_entry = (
+            self._get_reauth_entry()
+            if self.source == SOURCE_REAUTH
+            else self._get_reconfigure_entry()
+        )
         if user_input is not None:
-            if await self.validate_input(user_input):
+            if not await self.validate_input(user_input):
+                errors["base"] = "invalid_host_or_credentials"
+            else:
                 unique_id = slugify(user_input[CONF_HOST])
-                config_entry = self.hass.config_entries.async_get_entry(
-                    self.context["entry_id"]
-                )
-                assert config_entry
-                if not any(
-                    entry
+                if any(
+                    entry.unique_id == unique_id
                     for entry in self.hass.config_entries.async_entries(DOMAIN)
-                    if entry != config_entry and entry.unique_id == unique_id
+                    if entry.entry_id != config_entry.entry_id
                 ):
+                    errors[CONF_HOST] = "already_configured"
+                else:
                     # Keep options this form does not collect (the entity
-                    # options); let the fields it does collect win.
+                    # options); the fields it does collect win and live in
+                    # options, never in data.
+                    data = dict(user_input)
                     options = dict(config_entry.options)
                     for key in (CONF_SCRYPTED_NVR, CONF_AUTO_REGISTER_RESOURCES):
-                        if key in user_input:
-                            options[key] = user_input[key]
-                    self.hass.config_entries.async_update_entry(
+                        if key in data:
+                            options[key] = data.pop(key)
+                    return self.async_update_reload_and_abort(
                         config_entry,
-                        data=user_input,
-                        options=options,
                         unique_id=unique_id,
+                        data=data,
+                        options=options,
                     )
-                    self.hass.async_create_task(
-                        self.hass.config_entries.async_reload(config_entry.entry_id)
-                    )
-                    return self.async_abort(reason="success")
 
-                errors[CONF_NAME] = "already_configured"
-
-            if not errors:
-                errors["base"] = "invalid_host_or_credentials"
-
-        defaults = user_input or self.context["data"]
-        include_auto = step_id != "credentials"
-        include_nvr = step_id != "credentials"
+        # Entries from before credentials were stored keep everything in options.
+        defaults = user_input or {**config_entry.options, **config_entry.data}
+        include_panel_options = step_id == "upgrade"
 
         return self.async_show_form(
             step_id=step_id,
             data_schema=_get_config_schema(
                 defaults,
-                auto_register_default=self._async_auto_register_default(defaults),
-                include_nvr=include_nvr,
-                include_auto_register=include_auto,
+                include_nvr=include_panel_options,
+                include_auto_register=include_panel_options,
             ),
             errors=errors,
         )
 
     async def async_step_credentials(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    ) -> ConfigFlowResult:
         """Handle credentials step."""
-        return await self._async_step_reauth("credentials", user_input)
+        return await self._async_step_update_entry("credentials", user_input)
 
     async def async_step_upgrade(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    ) -> ConfigFlowResult:
         """Handle upgrade step."""
-        return await self._async_step_reauth("upgrade", user_input)
+        return await self._async_step_update_entry("upgrade", user_input)
 
-    def _async_auto_register_default(self, data: dict[str, Any] | None) -> bool:
-        """Determine the auto register default."""
-        if data and CONF_AUTO_REGISTER_RESOURCES in data:
-            return data[CONF_AUTO_REGISTER_RESOURCES]
-        if options := self.context.get("options"):
-            return options.get(CONF_AUTO_REGISTER_RESOURCES, False)
-        return False
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let the user change the host, credentials, or panel name and icon."""
+        return await self._async_step_update_entry("reconfigure", user_input)
 
     @staticmethod
     @callback
     def async_get_options_flow(
         _config_entry: config_entries.ConfigEntry,
-    ) -> config_entries.OptionsFlow:
+    ) -> config_entries.OptionsFlowWithReload:
         """Return the options flow handler for this config entry."""
         return ScryptedOptionsFlowHandler()
 
 
-class ScryptedOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle Scrypted options."""
+class ScryptedOptionsFlowHandler(config_entries.OptionsFlowWithReload):
+    """Handle Scrypted options; saving them reloads the entry."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    ) -> ConfigFlowResult:
         """Initialize the options flow."""
         return await self.async_step_general(user_input)
 
     async def async_step_general(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
+    ) -> ConfigFlowResult:
         """Handle general options."""
         if user_input is not None:
             data = {

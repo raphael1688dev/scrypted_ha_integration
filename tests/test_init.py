@@ -24,7 +24,7 @@ from homeassistant.const import (
     CONF_URL,
     CONF_USERNAME,
 )
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from custom_components import scrypted
@@ -196,21 +196,6 @@ async def test_async_setup_without_domain_config(hass, mock_scrypted_view):
     assert registered["view"] == "view"
 
 
-async def test_async_setup_imports_yaml_config(
-    hass, mock_scrypted_view, mock_async_create_notification, mock_flow_async_init
-):
-    """Test case for test_async_setup_imports_yaml_config."""
-    hass.http = SimpleNamespace(register_view=lambda view: None)
-    result = await scrypted.async_setup(hass, {DOMAIN: {"host": EXAMPLE_HOST}})
-    await hass.async_block_till_done()
-    assert result is False
-    mock_flow_async_init.assert_awaited()
-    assert (
-        "Your Scrypted configuration"
-        in mock_async_create_notification.notifications["created"][0][1]
-    )
-
-
 async def test_async_setup_entry_registers_resources_and_panel(
     hass,
     mock_register_lovelace_resource,
@@ -267,51 +252,21 @@ async def test_async_setup_entry_moves_auto_register_flag(
     )
     entry.add_to_hass(hass)
     result = await scrypted.async_setup_entry(hass, entry)
-    assert result is False
-    mock_async_reload.assert_called_once_with(entry.entry_id)
+    # Migrated in place; setup carries on without a reload.
+    assert result is True
+    assert not mock_async_reload.called
     assert CONF_AUTO_REGISTER_RESOURCES not in entry.data
     assert CONF_SCRYPTED_NVR not in entry.data
     assert entry.options[CONF_AUTO_REGISTER_RESOURCES] is True
     assert entry.options[CONF_SCRYPTED_NVR] is True
 
 
-async def test_async_setup_entry_without_data_triggers_reauth(
-    hass, mock_flow_async_init
-):
-    """Test case for test_async_setup_entry_without_data_triggers_reauth."""
+async def test_async_setup_entry_without_data_requires_reauth(hass):
+    """An entry with no stored credentials asks for reauthentication."""
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
-    result = await scrypted.async_setup_entry(hass, entry)
-    await hass.async_block_till_done()
-    assert result is False
-    assert mock_flow_async_init.await_count == 1
-    assert mock_flow_async_init.call_args.kwargs["context"]["source"] == SOURCE_REAUTH
-    assert (
-        mock_flow_async_init.call_args.kwargs["context"]["entry_id"] == entry.entry_id
-    )
-
-
-async def test_update_listener_moves_option_keys(hass, mock_async_reload):
-    """Test case for test_update_listener_moves_option_keys."""
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={
-            CONF_HOST: EXAMPLE_HOST,
-            CONF_ICON: "mdi:test",
-            CONF_NAME: "Scrypted",
-            CONF_USERNAME: "user",
-            CONF_AUTO_REGISTER_RESOURCES: True,
-            CONF_SCRYPTED_NVR: True,
-        },
-        options={},
-    )
-    entry.add_to_hass(hass)
-    await scrypted._async_update_listener(hass, entry)
-    assert CONF_AUTO_REGISTER_RESOURCES not in entry.data
-    assert CONF_SCRYPTED_NVR not in entry.data
-    assert entry.options[CONF_AUTO_REGISTER_RESOURCES] is True
-    assert entry.options[CONF_SCRYPTED_NVR] is True
-    mock_async_reload.assert_called_once_with(entry.entry_id)
+    with pytest.raises(ConfigEntryAuthFailed):
+        await scrypted.async_setup_entry(hass, entry)
 
 
 async def test_ensure_entry_options_no_changes(hass, mock_async_update_entry):
@@ -355,10 +310,8 @@ async def test_ensure_entry_options_adds_defaults(hass, mock_async_update_entry)
     mock_async_update_entry.assert_called_once()
 
 
-async def test_async_setup_entry_handles_missing_token(
-    hass, mock_flow_async_init, mock_retrieve_token_none
-):
-    """Test case for test_async_setup_entry_handles_missing_token."""
+async def test_async_setup_entry_handles_missing_token(hass, mock_retrieve_token_none):
+    """An empty token means the login was not accepted."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -375,17 +328,65 @@ async def test_async_setup_entry_handles_missing_token(
         },
     )
     entry.add_to_hass(hass)
-    result = await scrypted.async_setup_entry(hass, entry)
-    await hass.async_block_till_done()
-    assert result is False
-    assert mock_flow_async_init.call_args.kwargs["context"]["source"] == SOURCE_REAUTH
+    with pytest.raises(ConfigEntryAuthFailed):
+        await scrypted.async_setup_entry(hass, entry)
+
+
+async def test_async_setup_entry_rejected_login_requires_reauth(
+    hass, mock_retrieve_token_error
+):
+    """Scrypted's 200-without-token reply to bad credentials asks for reauth."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: EXAMPLE_HOST,
+            CONF_ICON: "mdi:test",
+            CONF_NAME: "Scrypted",
+            CONF_USERNAME: "user",
+        },
+        options={
+            CONF_AUTO_REGISTER_RESOURCES: False,
+            CONF_SCRYPTED_NVR: False,
+            CONF_ENABLE_ENTITIES: False,
+            "device_types": ["Camera", "Doorbell"],
+        },
+    )
+    entry.add_to_hass(hass)
+    with pytest.raises(ConfigEntryAuthFailed):
+        await scrypted.async_setup_entry(hass, entry)
+
+
+async def test_async_setup_entry_server_error_propagates(hass, patch_retrieve_token):
+    """An HTTP error that is not about credentials is not turned into reauth."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: EXAMPLE_HOST,
+            CONF_ICON: "mdi:test",
+            CONF_NAME: "Scrypted",
+            CONF_USERNAME: "user",
+        },
+        options={
+            CONF_AUTO_REGISTER_RESOURCES: False,
+            CONF_SCRYPTED_NVR: False,
+            CONF_ENABLE_ENTITIES: False,
+            "device_types": ["Camera", "Doorbell"],
+        },
+    )
+    entry.add_to_hass(hass)
+
+    async def _raise(*args, **kwargs):
+        raise ClientResponseError(MagicMock(), (), status=500)
+
+    with patch_retrieve_token(_raise), pytest.raises(ClientResponseError):
+        await scrypted.async_setup_entry(hass, entry)
 
 
 @pytest.mark.parametrize("status", [401, 403])
-async def test_async_setup_entry_auth_error_triggers_reauth(
-    hass, mock_flow_async_init, patch_retrieve_token, status
+async def test_async_setup_entry_auth_error_requires_reauth(
+    hass, patch_retrieve_token, status
 ):
-    """Test case for test_async_setup_entry_auth_error_triggers_reauth."""
+    """HTTP 401/403 from token retrieval asks for reauthentication."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -406,11 +407,8 @@ async def test_async_setup_entry_auth_error_triggers_reauth(
     async def _raise(*args, **kwargs):
         raise ClientResponseError(MagicMock(), (), status=status)
 
-    with patch_retrieve_token(_raise):
-        result = await scrypted.async_setup_entry(hass, entry)
-    await hass.async_block_till_done()
-    assert result is False
-    assert mock_flow_async_init.call_args.kwargs["context"]["source"] == SOURCE_REAUTH
+    with patch_retrieve_token(_raise), pytest.raises(ConfigEntryAuthFailed):
+        await scrypted.async_setup_entry(hass, entry)
 
 
 async def test_async_setup_entry_client_connector_error(
@@ -629,8 +627,8 @@ async def test_setup_entry_entities_disabled(hass, enable_custom_integrations):
     assert entry.runtime_data.client is None
 
 
-async def test_setup_entry_auth_error_starts_reauth(hass):
-    """HTTP 401 from token retrieval starts the reauth flow."""
+async def test_setup_entry_auth_error_starts_reauth(hass, patch_retrieve_token):
+    """HTTP 401 from token retrieval leaves the entry failed with a reauth flow."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_HOST: "example", CONF_USERNAME: "u"},
@@ -646,15 +644,14 @@ async def test_setup_entry_auth_error_starts_reauth(hass):
     async def _raise(data, session):
         raise ClientResponseError(request_info=MagicMock(), history=(), status=401)
 
-    flow_init = AsyncMock()
-    with (
-        patch.object(scrypted, "retrieve_token", _raise),
-        patch.object(hass.config_entries.flow, "async_init", flow_init),
-    ):
-        result = await scrypted.async_setup_entry(hass, entry)
+    with patch_retrieve_token(_raise):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-        assert result is False
-        flow_init.assert_awaited()
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+    assert flows[0]["context"]["entry_id"] == entry.entry_id
 
 
 async def test_setup_entry_not_ready_on_engineio_failure(
@@ -764,6 +761,8 @@ async def test_reload_prunes_devices_the_options_now_hide(
     hass.config_entries.async_update_entry(
         entry, options={**entry.options, "device_types": ["Camera", "Doorbell"]}
     )
+    # The options flow reloads after saving; a direct update has to ask.
+    await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
     assert (

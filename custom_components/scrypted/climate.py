@@ -63,6 +63,10 @@ CLIMATE = ScryptedClimateDescription(
 )
 
 
+# State is pushed by scrypted and commands are independent RPC calls.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -90,7 +94,7 @@ class ScryptedThermostat(ScryptedDeviceEntity, ClimateEntity):
     """Thermostat control backed by scrypted TemperatureSetting."""
 
     entity_description: ScryptedClimateDescription
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
 
     @property
     def _setting(self) -> dict:
@@ -129,25 +133,25 @@ class ScryptedThermostat(ScryptedDeviceEntity, ClimateEntity):
         return ACTIVE_TO_ACTION.get(active) if active is not None else None
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the single setpoint, or None when the setpoint is a range."""
         setpoint = self._setting.get("setpoint")
         return None if isinstance(setpoint, (list, tuple)) else setpoint
 
     @property
-    def target_temperature_low(self) -> float | None:
+    def native_target_temperature_low(self) -> float | None:
         """Return the lower bound of a ranged setpoint."""
         setpoint = self._setting.get("setpoint")
         return setpoint[0] if isinstance(setpoint, (list, tuple)) else None
 
     @property
-    def target_temperature_high(self) -> float | None:
+    def native_target_temperature_high(self) -> float | None:
         """Return the upper bound of a ranged setpoint."""
         setpoint = self._setting.get("setpoint")
         return setpoint[1] if isinstance(setpoint, (list, tuple)) else None
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         """Return the Thermometer reading."""
         device = self.device
         return device.temperature if device else None
@@ -182,3 +186,21 @@ class ScryptedThermostat(ScryptedDeviceEntity, ClimateEntity):
             command["mode"] = HVAC_TO_SCRYPTED[kwargs[ATTR_HVAC_MODE]]
         if command:
             await self._async_device_command("setTemperature", command)
+
+
+# Home Assistant 2026.11 renamed the temperature members to native_*; earlier
+# releases only read the old names. 2026.11 is the minimum supported version, so
+# this only serves the test suite: pytest-homeassistant-custom-component still
+# pins 2026.10. Remove once it ships a 2026.11 release.
+if not hasattr(ClimateEntity, "native_current_temperature"):  # pragma: no cover
+    ScryptedThermostat._attr_temperature_unit = UnitOfTemperature.CELSIUS
+    ScryptedThermostat.current_temperature = (
+        ScryptedThermostat.native_current_temperature
+    )
+    ScryptedThermostat.target_temperature = ScryptedThermostat.native_target_temperature
+    ScryptedThermostat.target_temperature_low = (
+        ScryptedThermostat.native_target_temperature_low
+    )
+    ScryptedThermostat.target_temperature_high = (
+        ScryptedThermostat.native_target_temperature_high
+    )

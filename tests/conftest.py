@@ -228,19 +228,6 @@ def mock_async_update_entry(hass):
 
 
 @pytest.fixture
-def mock_async_create_notification():
-    """Patch async_create for persistent notifications."""
-    notifications = {}
-
-    def _create(*args, **kwargs):
-        notifications["created"] = (args, kwargs)
-
-    with patch("custom_components.scrypted.async_create", side_effect=_create) as mock:
-        mock.notifications = notifications
-        yield mock
-
-
-@pytest.fixture
 def mock_scrypted_view():
     """Patch ScryptedView."""
     with patch("custom_components.scrypted.ScryptedView", return_value="view") as mock:
