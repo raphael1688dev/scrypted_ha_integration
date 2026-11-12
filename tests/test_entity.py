@@ -338,9 +338,7 @@ def test_entity_id_change_hook_is_declared_beside_every_add_hook():
     )
 
 
-async def test_numeric_serial_number_is_registered_as_text(
-    hass, system_state, enable_custom_integrations, caplog
-):
+async def test_numeric_serial_number_is_registered_as_text(hass, system_state, caplog):
     """Regression for koush/ha_scrypted#73: the registry rejects non-string serials from 2026.12."""
     system_state["cam1"]["info"]["value"]["serialNumber"] = 123456
     entry = await setup_entry(hass)
