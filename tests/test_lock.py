@@ -8,7 +8,7 @@ from tests.conftest import setup_entry
 TYPES = ["Camera", "Doorbell", "Lock"]
 
 
-async def test_lock_discovered_and_states(hass, fake_sdk, enable_custom_integrations):
+async def test_lock_discovered_and_states(hass, fake_sdk):
     """Lock discovered and states."""
     await setup_entry(hass, device_types=TYPES)
     assert hass.states.get("lock.side_door").state == "locked"
@@ -22,15 +22,13 @@ async def test_lock_discovered_and_states(hass, fake_sdk, enable_custom_integrat
     assert hass.states.get("lock.side_door").state == "jammed"
 
 
-async def test_lock_not_in_allowlist_skipped(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_lock_not_in_allowlist_skipped(hass, fake_sdk):
     """Lock device present but excluded from the configured type allowlist."""
     await setup_entry(hass, device_types=["Camera", "Doorbell"])
     assert hass.states.get("lock.side_door") is None
 
 
-async def test_lock_commands(hass, fake_sdk, enable_custom_integrations):
+async def test_lock_commands(hass, fake_sdk):
     """Lock commands."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("lock1")
@@ -46,9 +44,7 @@ async def test_lock_commands(hass, fake_sdk, enable_custom_integrations):
     device.lock.assert_awaited_once()
 
 
-async def test_new_device_signal_ignored_for_unknown_or_disconnected(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_new_device_signal_ignored_for_unknown_or_disconnected(hass, fake_sdk):
     """New device signal ignored for unknown or disconnected."""
     entry = await setup_entry(hass, device_types=TYPES)
     before = len(hass.states.async_entity_ids("lock"))

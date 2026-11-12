@@ -5,9 +5,7 @@ from tests.conftest import setup_entry
 TYPES = ["Camera", "Doorbell", "Thermostat"]
 
 
-async def test_thermostat_discovered_with_state(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_thermostat_discovered_with_state(hass, fake_sdk):
     """Thermostat discovered with state."""
     await setup_entry(hass, device_types=TYPES)
     state = hass.states.get("climate.hallway_thermostat")
@@ -20,7 +18,7 @@ async def test_thermostat_discovered_with_state(
     assert state.attributes["current_humidity"] == 40
 
 
-async def test_thermostat_range_setpoint(hass, fake_sdk, enable_custom_integrations):
+async def test_thermostat_range_setpoint(hass, fake_sdk):
     """Thermostat range setpoint."""
     fake_sdk.systemManager.systemState["thermo1"]["temperatureSetting"] = {
         "value": {
@@ -37,9 +35,7 @@ async def test_thermostat_range_setpoint(hass, fake_sdk, enable_custom_integrati
     assert state.attributes["hvac_action"] == "cooling"
 
 
-async def test_thermostat_mode_and_action_absent(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_thermostat_mode_and_action_absent(hass, fake_sdk):
     """Thermostat reports unknown mode and no action when scrypted omits them."""
     fake_sdk.systemManager.systemState["thermo1"]["temperatureSetting"] = {
         "value": {"availableModes": ["Off", "Heat"], "setpoint": 21}
@@ -50,7 +46,7 @@ async def test_thermostat_mode_and_action_absent(
     assert state.attributes.get("hvac_action") is None
 
 
-async def test_thermostat_commands(hass, fake_sdk, enable_custom_integrations):
+async def test_thermostat_commands(hass, fake_sdk):
     """Thermostat commands."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("thermo1")
@@ -72,7 +68,7 @@ async def test_thermostat_commands(hass, fake_sdk, enable_custom_integrations):
     device.setTemperature.assert_awaited_with({"mode": "Cool"})
 
 
-async def test_thermostat_turn_off(hass, fake_sdk, enable_custom_integrations):
+async def test_thermostat_turn_off(hass, fake_sdk):
     """Thermostat turn off."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("thermo1")
@@ -86,9 +82,7 @@ async def test_thermostat_turn_off(hass, fake_sdk, enable_custom_integrations):
     device.setTemperature.assert_awaited_with({"mode": "Off"})
 
 
-async def test_thermostat_set_temperature_with_hvac_mode(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_thermostat_set_temperature_with_hvac_mode(hass, fake_sdk):
     """Thermostat set temperature with hvac mode."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("thermo1")
@@ -104,7 +98,7 @@ async def test_thermostat_set_temperature_with_hvac_mode(
     device.setTemperature.assert_not_awaited()
 
 
-async def test_thermostat_range_command(hass, fake_sdk, enable_custom_integrations):
+async def test_thermostat_range_command(hass, fake_sdk):
     """Thermostat range command."""
     fake_sdk.systemManager.systemState["thermo1"]["temperatureSetting"] = {
         "value": {

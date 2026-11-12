@@ -5,7 +5,7 @@ from tests.conftest import setup_entry
 TYPES = ["Camera", "Doorbell", "Vacuum"]
 
 
-async def test_vacuum_activity_states(hass, fake_sdk, enable_custom_integrations):
+async def test_vacuum_activity_states(hass, fake_sdk):
     """Vacuum activity states."""
     await setup_entry(hass, device_types=TYPES)
     assert hass.states.get("vacuum.robo_vac").state == "docked"
@@ -25,7 +25,7 @@ async def test_vacuum_activity_states(hass, fake_sdk, enable_custom_integrations
     assert hass.states.get("vacuum.robo_vac").state == "idle"
 
 
-async def test_vacuum_commands(hass, fake_sdk, enable_custom_integrations):
+async def test_vacuum_commands(hass, fake_sdk):
     """Vacuum commands."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("vac1")
@@ -60,9 +60,7 @@ async def test_vacuum_commands(hass, fake_sdk, enable_custom_integrations):
     device.dock.assert_awaited_once()
 
 
-async def test_vacuum_activity_none_when_device_gone(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_vacuum_activity_none_when_device_gone(hass, fake_sdk):
     """Vacuum activity none when device gone."""
     entry = await setup_entry(hass, device_types=TYPES)
     entity = hass.data["entity_components"]["vacuum"].get_entity("vacuum.robo_vac")

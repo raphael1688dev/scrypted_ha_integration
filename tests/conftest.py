@@ -10,12 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientConnectorError, web
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
-pytest_plugins = ["pytest_homeassistant_custom_component"]
-
-from custom_components.scrypted import http, hub  # noqa: E402
-from custom_components.scrypted.const import (  # noqa: E402
+from custom_components.scrypted import http, hub
+from custom_components.scrypted.const import (
     CONF_AUTO_REGISTER_RESOURCES,
     CONF_DEVICE_TYPES,
     CONF_ENABLE_ENTITIES,
@@ -44,12 +42,6 @@ def login_success_fixture() -> dict:
 def login_error_not_logged_in_fixture() -> dict:
     """Load the not logged in error fixture."""
     return load_fixture("login_error_not_logged_in.json")
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    """Allow loading this custom integration in tests."""
-    yield
 
 
 # ---------------------------------------------------------------------------

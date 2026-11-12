@@ -11,7 +11,7 @@ import aiohttp
 from aiohttp import hdrs, web
 from aiohttp.web_exceptions import HTTPBadGateway, HTTPBadRequest
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
-from pytest_homeassistant_custom_component.common import (
+from pytest_homeassistant.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
@@ -29,9 +29,7 @@ from custom_components.scrypted.const import (
 from tests.conftest import setup_entry
 
 
-async def test_motion_sensor_created_and_updates(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_motion_sensor_created_and_updates(hass, fake_sdk):
     """Motion sensor created and updates."""
     await setup_entry(hass)
 
@@ -44,7 +42,7 @@ async def test_motion_sensor_created_and_updates(
     assert hass.states.get("binary_sensor.porch_front_door_cam_motion").state == "on"
 
 
-async def test_flood_sensor_created(hass, fake_sdk, enable_custom_integrations):
+async def test_flood_sensor_created(hass, fake_sdk):
     """Flood sensor created."""
     await setup_entry(hass)
     state = hass.states.get("binary_sensor.basement_basement_leak_flooded")
@@ -52,9 +50,7 @@ async def test_flood_sensor_created(hass, fake_sdk, enable_custom_integrations):
     assert state.state == "off"
 
 
-async def test_excluded_plugin_has_no_entities(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_excluded_plugin_has_no_entities(hass, fake_sdk):
     """Excluded plugin has no entities."""
     await setup_entry(hass)
     # plugin1 (type API) must not create a connectivity sensor
@@ -65,7 +61,7 @@ async def test_excluded_plugin_has_no_entities(
     ]
 
 
-async def test_new_device_added_at_runtime(hass, fake_sdk, enable_custom_integrations):
+async def test_new_device_added_at_runtime(hass, fake_sdk):
     """New device added at runtime."""
     await setup_entry(hass)
     fake_sdk.systemManager.systemState["new1"] = {
@@ -81,7 +77,7 @@ async def test_new_device_added_at_runtime(hass, fake_sdk, enable_custom_integra
     assert state.state == "on"
 
 
-async def test_offline_device_unavailable(hass, fake_sdk, enable_custom_integrations):
+async def test_offline_device_unavailable(hass, fake_sdk):
     """Offline device unavailable."""
     await setup_entry(hass)
     fake_sdk.systemManager.set_property("cam1", "online", False)
@@ -92,7 +88,7 @@ async def test_offline_device_unavailable(hass, fake_sdk, enable_custom_integrat
     )
 
 
-async def test_new_device_signal_dedup(hass, fake_sdk, enable_custom_integrations):
+async def test_new_device_signal_dedup(hass, fake_sdk):
     """Re-announcing a known or unknown device creates no duplicate entities."""
     entry = await setup_entry(hass)
     before = len(hass.states.async_all())
@@ -116,9 +112,7 @@ def test_binary_sensor_is_on_none_when_property_missing(fake_sdk):
     assert entity.is_on is None
 
 
-async def test_online_sensor_reports_off_when_device_offline(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_online_sensor_reports_off_when_device_offline(hass, fake_sdk):
     """The connectivity sensor reports off rather than going unavailable."""
     await setup_entry(hass)
     online = "binary_sensor.porch_front_door_cam_online"
@@ -155,9 +149,7 @@ async def _setup_with_detected_sensors_enabled(hass: HomeAssistant):
         return await setup_entry(hass)
 
 
-async def test_detected_sensors_created_disabled(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_detected_sensors_created_disabled(hass, fake_sdk):
     """Each advertised class gets a sensor, created disabled."""
     await setup_entry(hass)
     registry = er.async_get(hass)
@@ -176,7 +168,7 @@ async def test_detected_sensors_created_disabled(
 
 
 async def test_detected_sensor_turns_off_after_quiet_period(
-    hass, fake_sdk, enable_custom_integrations, freezer: FrozenDateTimeFactory
+    hass, fake_sdk, freezer: FrozenDateTimeFactory
 ):
     """A sensor is on while its class keeps being detected, then clears."""
     await _setup_with_detected_sensors_enabled(hass)
@@ -209,9 +201,7 @@ async def test_detected_sensor_turns_off_after_quiet_period(
     assert hass.states.get(CAR_DETECTED).state == STATE_ON
 
 
-async def test_detected_sensors_share_one_subscription(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_detected_sensors_share_one_subscription(hass, fake_sdk):
     """The event entity and every detected sensor share one listenDevice."""
     manager = fake_sdk.systemManager
     with patch.object(manager, "listenDevice", wraps=manager.listenDevice) as listen:
@@ -222,7 +212,7 @@ async def test_detected_sensors_share_one_subscription(
 
 
 async def test_unload_cancels_pending_clear(
-    hass, fake_sdk, enable_custom_integrations, freezer: FrozenDateTimeFactory
+    hass, fake_sdk, freezer: FrozenDateTimeFactory
 ):
     """Unloading while a sensor is on cancels its timer and the subscription."""
     entry = await _setup_with_detected_sensors_enabled(hass)

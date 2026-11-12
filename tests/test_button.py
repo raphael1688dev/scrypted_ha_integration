@@ -24,9 +24,7 @@ async def _setup_with_restart_enabled(hass):
         return await setup_entry(hass)
 
 
-async def test_restart_button_created_disabled(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_restart_button_created_disabled(hass, fake_sdk):
     """Devices with Reboot get a disabled Restart button; others get none."""
     await setup_entry(hass)
     registry = er.async_get(hass)
@@ -40,9 +38,7 @@ async def test_restart_button_created_disabled(
     assert registry.async_get("button.doorbell_restart") is None
 
 
-async def test_restart_button_reboots_device(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_restart_button_reboots_device(hass, fake_sdk):
     """Pressing Restart calls reboot on the device."""
     await _setup_with_restart_enabled(hass)
     device = fake_sdk.systemManager.getDeviceById("cam1")
@@ -53,9 +49,7 @@ async def test_restart_button_reboots_device(
     device.reboot.assert_awaited_once_with()
 
 
-async def test_restart_button_surfaces_failure(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_restart_button_surfaces_failure(hass, fake_sdk):
     """A failed reboot is reported as a service error."""
     await _setup_with_restart_enabled(hass)
     fake_sdk.systemManager.getDeviceById("cam1").reboot.side_effect = RuntimeError(

@@ -7,7 +7,7 @@ from tests.conftest import setup_entry
 TYPES = ["Camera", "Doorbell", "Garage", "Entry", "WindowCovering"]
 
 
-async def test_garage_discovered_with_state(hass, fake_sdk, enable_custom_integrations):
+async def test_garage_discovered_with_state(hass, fake_sdk):
     """Garage discovered with state."""
     await setup_entry(hass, device_types=TYPES)
     state = hass.states.get("cover.garage_door")
@@ -25,7 +25,7 @@ async def test_garage_discovered_with_state(hass, fake_sdk, enable_custom_integr
     assert hass.states.get("cover.garage_door").state == "unknown"
 
 
-async def test_cover_commands(hass, fake_sdk, enable_custom_integrations):
+async def test_cover_commands(hass, fake_sdk):
     """Cover commands."""
     await setup_entry(hass, device_types=TYPES)
     device = fake_sdk.systemManager.getDeviceById("garage1")
@@ -41,9 +41,7 @@ async def test_cover_commands(hass, fake_sdk, enable_custom_integrations):
     device.closeEntry.assert_awaited_once()
 
 
-async def test_stateless_cover_assumed(
-    hass, fake_sdk, system_state, enable_custom_integrations
-):
+async def test_stateless_cover_assumed(hass, fake_sdk, system_state):
     """Stateless cover assumed."""
     # a gate with Entry but no EntrySensor
     system_state["gate1"] = copy.deepcopy(system_state["garage1"])

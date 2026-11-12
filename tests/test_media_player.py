@@ -10,9 +10,7 @@ from homeassistant.exceptions import HomeAssistantError
 from tests.conftest import setup_entry
 
 
-async def test_intercom_media_player_created(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_intercom_media_player_created(hass, fake_sdk):
     """Intercom media player created."""
     await setup_entry(hass)
     state = hass.states.get("media_player.doorbell_speaker")
@@ -22,9 +20,7 @@ async def test_intercom_media_player_created(
     assert hass.states.get("media_player.porch_front_door_cam_speaker") is None
 
 
-async def test_play_media_url_starts_intercom(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_play_media_url_starts_intercom(hass, fake_sdk):
     """Play media url starts intercom."""
     await setup_entry(hass)
     await hass.services.async_call(
@@ -54,9 +50,7 @@ async def test_play_media_url_starts_intercom(
     assert hass.states.get("media_player.doorbell_speaker").state == "idle"
 
 
-async def test_play_media_resolves_media_source(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_play_media_resolves_media_source(hass, fake_sdk):
     """Play media resolves media source."""
     await setup_entry(hass)
     resolved = SimpleNamespace(url="/local/tts.mp3", mime_type="audio/mpeg")
@@ -81,9 +75,7 @@ async def test_play_media_resolves_media_source(
     assert url.startswith("http")
 
 
-async def test_play_media_unavailable_device_raises(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_play_media_unavailable_device_raises(hass, fake_sdk):
     """Play media unavailable device raises."""
     await setup_entry(hass)
     component = hass.data["media_player"]
@@ -95,9 +87,7 @@ async def test_play_media_unavailable_device_raises(
     await entity.async_media_stop()
 
 
-async def test_browse_media_delegates_to_media_source(
-    hass, fake_sdk, enable_custom_integrations
-):
+async def test_browse_media_delegates_to_media_source(hass, fake_sdk):
     """Browse media delegates to media source."""
     await setup_entry(hass)
     sentinel = object()

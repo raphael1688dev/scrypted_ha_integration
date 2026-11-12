@@ -3,6 +3,6 @@ home-assistant-frontend
 pytest
 pytest-asyncio
 pytest-cov
-pytest-homeassistant-custom-component
+pytest-homeassistant==2026.11.1
 PyTurboJPEG
 scrypted-sdk==0.1.1
