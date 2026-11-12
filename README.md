@@ -34,8 +34,8 @@ integration reloads. Devices that Scrypted itself no longer reports are kept,
 since they may only be missing briefly; delete those from the device page once
 you're sure they're gone.
 
-- **Camera** — snapshots for `VideoCamera` devices. Live streaming is
-  only supported using the Scrypted NVR cards.
+- **Camera** — snapshots for `VideoCamera` devices. For live video use the
+  bundled camera card (below) or the Scrypted NVR cards.
 - **Binary sensor** — motion, doorbell button, sound, occupancy, flood, entry,
   power, connectivity, tamper, charging, sleeping.
 - **Detected binary sensors** — one per object class a camera's detector
@@ -66,6 +66,37 @@ browser (camera → day → clip) and play through HA's stream component.
 
 State updates are pushed; no polling. Entities reconnect automatically if the
 server restarts.
+
+## Live video: the bundled camera card
+
+The integration includes
+[scrypted-camera-card](https://github.com/raphael1688dev/scrypted-camera-card),
+a dashboard card that plays a Scrypted camera over WebRTC, with talkback and
+fullscreen. It needs no Scrypted NVR subscription and no separate install: the
+card is loaded on every dashboard as soon as the integration is set up.
+
+```yaml
+type: custom:scrypted-camera-card
+device: Front Door  # Scrypted device name or id
+```
+
+The Scrypted device id is also shown as the `device_id` attribute of each
+camera entity. See the card's README for every option.
+
+The card remains a separate project and can still be installed on its own.
+If it is registered as a dashboard resource (a Marketplace install, or a build
+you are developing under `/local/`), that copy is used and the bundled one is
+not loaded, so the two never run together. To switch to the bundled card,
+delete the resource under **Settings > Dashboards > Resources**, uninstall the
+card from the Marketplace, then reload the integration and the browser page.
+
+The bundled file is the unmodified release build of the card, which is MIT
+licensed (`custom_components/scrypted/frontend/LICENSE.scrypted-camera-card`).
+A scheduled workflow (`.github/workflows/update-card.yaml`) opens a pull
+request here whenever the card repository publishes a new full release; it
+runs `python scripts/update_card.py vX.Y.Z`, which can also be run by hand.
+A new card reaches users with the next integration release, after a Home
+Assistant restart.
 
 ## Development
 

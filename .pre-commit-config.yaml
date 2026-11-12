@@ -1,4 +1,7 @@
 ---
+# The vendored card bundle is build output: hooks must not rewrite it.
+exclude: ^custom_components/scrypted/frontend/
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.6

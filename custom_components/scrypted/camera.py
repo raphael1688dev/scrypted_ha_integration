@@ -1,8 +1,8 @@
 """Camera entities for Scrypted video devices.
 
-Cameras are snapshot-only by design: live streaming is intentionally not
-supported so that users view live video through the scrypted NVR cards
-instead (upstream request).
+Camera entities are snapshot-only by design. Live video on a dashboard comes
+from the bundled scrypted-camera-card (see card.py), which needs no NVR
+subscription, or from the scrypted NVR cards.
 """
 
 from __future__ import annotations

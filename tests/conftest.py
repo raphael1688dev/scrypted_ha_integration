@@ -228,6 +228,15 @@ def mock_async_update_entry(hass):
 
 
 @pytest.fixture
+def mock_sync_card():
+    """Patch the bundled-card sync for tests that call setup without a frontend."""
+    with patch(
+        "custom_components.scrypted.async_sync_card", new_callable=AsyncMock
+    ) as mock:
+        yield mock
+
+
+@pytest.fixture
 def mock_scrypted_view():
     """Patch ScryptedView."""
     with patch("custom_components.scrypted.ScryptedView", return_value="view") as mock:

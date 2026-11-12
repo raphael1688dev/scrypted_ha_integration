@@ -191,13 +191,16 @@ async def test_async_setup_without_domain_config(hass, mock_scrypted_view):
     hass.http = SimpleNamespace(
         register_view=lambda view: registered.setdefault("view", view)
     )
-    result = await scrypted.async_setup(hass, {})
+    with patch.object(scrypted, "async_register_card", AsyncMock()) as register_card:
+        result = await scrypted.async_setup(hass, {})
     assert result is True
     assert registered["view"] == "view"
+    register_card.assert_awaited_once_with(hass)
 
 
 async def test_async_setup_entry_registers_resources_and_panel(
     hass,
+    mock_sync_card,
     mock_register_lovelace_resource,
     mock_register_built_in_panel,
     mock_forward_entry_setups,
@@ -233,6 +236,7 @@ async def test_async_setup_entry_registers_resources_and_panel(
 
 async def test_async_setup_entry_moves_auto_register_flag(
     hass,
+    mock_sync_card,
     mock_register_lovelace_resource,
     mock_register_built_in_panel,
     mock_forward_entry_setups,
@@ -483,7 +487,7 @@ async def test_async_unload_entry(
 
 
 async def test_panel_registered_with_token(
-    hass, mock_register_built_in_panel, mock_forward_entry_setups
+    hass, mock_sync_card, mock_register_built_in_panel, mock_forward_entry_setups
 ):
     """Test that panel is registered using token in the URL path."""
     entry = MockConfigEntry(
@@ -530,7 +534,9 @@ async def test_panel_unregistered_with_token(
     assert mock_remove_panel.removed_panels == [f"{DOMAIN}_token"]
 
 
-async def test_panel_reload_uses_consistent_url_path(hass, mock_panel_lifecycle):
+async def test_panel_reload_uses_consistent_url_path(
+    hass, mock_sync_card, mock_panel_lifecycle
+):
     """Test that panel can be reloaded without 'Overwriting panel' errors.
 
     This verifies that both registration and unregistration use the same
@@ -835,7 +841,7 @@ async def test_failed_connect_does_not_publish_token(hass, mock_forward_entry_se
 
 
 async def test_panel_opts_out_of_automatic_safe_area_padding(
-    hass, mock_register_built_in_panel, mock_forward_entry_setups
+    hass, mock_sync_card, mock_register_built_in_panel, mock_forward_entry_setups
 ):
     """The panel handles safe-area insets itself, so HA must not also pad it."""
     entry = MockConfigEntry(
@@ -868,7 +874,7 @@ async def test_panel_opts_out_of_automatic_safe_area_padding(
 
 
 async def test_panel_config_names_its_own_entry(
-    hass, mock_register_built_in_panel, mock_forward_entry_setups
+    hass, mock_sync_card, mock_register_built_in_panel, mock_forward_entry_setups
 ):
     """Each panel's config carries its entry's page, not a shared one."""
     entry = MockConfigEntry(

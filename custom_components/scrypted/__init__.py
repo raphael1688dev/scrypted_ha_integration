@@ -33,6 +33,7 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
+from .card import async_register_card, async_sync_card
 from .const import (
     CONF_AUTO_REGISTER_RESOURCES,
     CONF_DEVICE_TYPES,
@@ -225,9 +226,10 @@ async def _async_unregister_lovelace_resource(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the proxy view shared by every config entry."""
+    """Register the proxy view and the bundled card, shared by every config entry."""
     session = async_get_clientsession(hass, verify_ssl=False)
     hass.http.register_view(ScryptedView(hass, session))
+    await async_register_card(hass)
     return True
 
 
@@ -295,6 +297,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
     if config_entry.options.get(CONF_AUTO_REGISTER_RESOURCES):
         await _async_register_lovelace_resource(hass, token, config_entry.entry_id)
+    # On every (re)load: a separately installed card takes precedence.
+    await async_sync_card(hass)
 
     custom_panel_config = {
         "name": "ha-panel-scrypted",
