@@ -192,6 +192,10 @@ class ScryptedTokenSensor(SensorEntity):
         self._attr_unique_id = config_entry.data[CONF_HOST]
         self._attr_native_value = token
         self._attr_icon = "mdi:shield-key"
+        # Nothing reads this at runtime; it exists so the token can be copied
+        # into Scrypted's notifier settings or a hand-written resource URL.
+        # Diagnostic keeps it off auto-generated dashboards.
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_should_poll = False
         self._attr_extra_state_attributes = {CONF_HOST: config_entry.data[CONF_HOST]}
 

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, EntityCategory
 
 from custom_components.scrypted import ScryptedRuntimeData, sensor
 from custom_components.scrypted.const import DOMAIN
@@ -22,6 +22,7 @@ def test_sensor_attributes():
     assert entity.name == f"Scrypted token: {EXAMPLE_HOST}"
     assert entity.native_value == "token"
     assert entity.extra_state_attributes[CONF_HOST] == EXAMPLE_HOST
+    assert entity.entity_category is EntityCategory.DIAGNOSTIC
 
 
 async def test_async_setup_entry_adds_token_sensor(hass):
