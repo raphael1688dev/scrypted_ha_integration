@@ -187,7 +187,7 @@ async def test_reauth_duplicate_host_sets_error(hass):
     assert result["errors"][CONF_HOST] == "already_configured"
 
 
-async def test_options_flow_updates_entry(hass):
+async def test_options_flow_updates_entry(hass, mock_async_reload):
     """Test case for test_options_flow_updates_entry."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -261,7 +261,7 @@ async def test_options_flow_init_shows_general_step(hass):
     assert result["step_id"] == "general"
 
 
-async def test_options_flow_complete_end_to_end(hass):
+async def test_options_flow_complete_end_to_end(hass, mock_async_reload):
     """Test a complete options flow from init to entry creation."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -297,7 +297,7 @@ async def test_validate_input_missing_field_returns_false(hass):
     assert await flow.validate_input(data) is False
 
 
-async def test_options_flow_includes_enable_entities(hass):
+async def test_options_flow_includes_enable_entities(hass, mock_async_reload):
     """Options flow exposes and persists the enable_entities flag."""
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -466,6 +466,8 @@ async def test_options_flow_lists_plugins_from_live_server(
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_EXCLUDED_PLUGINS] == ["@scrypted/ring"]
+    # Saving options reloads the entry; let that finish before teardown.
+    await hass.async_block_till_done()
 
 
 async def test_options_flow_plugins_without_connection(hass):
