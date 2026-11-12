@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from homeassistant import config_entries
 from homeassistant.const import (

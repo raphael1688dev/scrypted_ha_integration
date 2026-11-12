@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import ClientResponseError
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 from scrypted_sdk import ScryptedConnectionError
 
 from homeassistant.components.lovelace.const import DOMAIN as LL_DOMAIN
