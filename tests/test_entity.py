@@ -336,3 +336,19 @@ def test_entity_id_change_hook_is_declared_beside_every_add_hook():
         ScryptedDeviceEntity.async_entity_id_changed(SimpleNamespace(), "old.id")
         is None
     )
+
+
+async def test_numeric_serial_number_is_registered_as_text(
+    hass, system_state, enable_custom_integrations, caplog
+):
+    """Regression for koush/ha_scrypted#73: the registry rejects non-string serials from 2026.12."""
+    system_state["cam1"]["info"]["value"]["serialNumber"] = 123456
+    entry = await setup_entry(hass)
+
+    cam = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, f"{entry.entry_id}_cam1"), entry.entry_id
+    )
+
+    assert cam is not None
+    assert cam.serial_number == "123456"
+    assert "non-string value" not in caplog.text
