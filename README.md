@@ -1,6 +1,7 @@
-# Scrypted Custom Component for Home Assistant
+# Scrypted HA(Mod)
 
-The Scrypted Custom Component for Home Assistant adds support for managing
+A modified fork of [koush/ha_scrypted](https://github.com/koush/ha_scrypted),
+the Scrypted custom component for Home Assistant. It adds support for managing
 Scrypted from your Home Assistant Dashboard, and creation of Scrypted NVR
 cards.
 
