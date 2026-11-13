@@ -24,10 +24,15 @@ from homeassistant.const import (
     CONF_URL,
     CONF_USERNAME,
 )
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+)
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from custom_components import scrypted
+from custom_components.scrypted import http
 from custom_components.scrypted.const import (
     CONF_AUTO_REGISTER_RESOURCES,
     CONF_ENABLE_ENTITIES,
@@ -279,11 +284,11 @@ async def test_ensure_entry_options_no_changes(hass, mock_async_update_entry):
         domain=DOMAIN,
         data={
             CONF_HOST: EXAMPLE_HOST,
-            CONF_ICON: "mdi:test",
-            CONF_NAME: "Scrypted",
             CONF_USERNAME: "user",
         },
         options={
+            CONF_ICON: "mdi:test",
+            CONF_NAME: "Scrypted",
             CONF_AUTO_REGISTER_RESOURCES: False,
             CONF_SCRYPTED_NVR: False,
             CONF_ENABLE_ENTITIES: False,
@@ -312,6 +317,94 @@ async def test_ensure_entry_options_adds_defaults(hass, mock_async_update_entry)
     changed = await scrypted._async_ensure_entry_options(hass, entry)
     assert changed is True
     mock_async_update_entry.assert_called_once()
+    # The panel's title and icon move to options; the connection stays in data.
+    kwargs = mock_async_update_entry.call_args.kwargs
+    assert kwargs["data"] == {CONF_HOST: EXAMPLE_HOST, CONF_USERNAME: "user"}
+    assert kwargs["options"][CONF_NAME] == "Scrypted"
+    assert kwargs["options"][CONF_ICON] == "mdi:test"
+
+
+async def test_async_setup_entry_invalid_host_is_a_setup_error(
+    hass, patch_retrieve_token
+):
+    """A malformed host cannot be fixed by reauth, which keeps the host."""
+
+    async def _invalid_host(*args, **kwargs):
+        raise http.InvalidHost("invalid Scrypted host")
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: "a:b:c", CONF_USERNAME: "user"}
+    )
+    entry.add_to_hass(hass)
+    with patch_retrieve_token(_invalid_host), pytest.raises(ConfigEntryError):
+        await scrypted.async_setup_entry(hass, entry)
+
+
+async def test_migrate_drops_host_unique_id_and_moves_token_sensor(hass):
+    """1.2: no IP-based unique ID; the token sensor keyed by entry, orphans gone."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: "1.2.3.4", CONF_USERNAME: "u", "password": "p"},
+        options={CONF_NAME: "Scrypted", CONF_ICON: "mdi:memory"},
+        unique_id="1_2_3_4",
+        version=1,
+        minor_version=1,
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    current = registry.async_get_or_create(
+        "sensor", DOMAIN, "1.2.3.4", config_entry=entry, suggested_object_id="tok"
+    )
+    orphan = registry.async_get_or_create(
+        "sensor", DOMAIN, "9.9.9.9", config_entry=entry, suggested_object_id="old"
+    )
+    device_sensor = registry.async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_cam1_battery", config_entry=entry
+    )
+
+    assert await scrypted.async_migrate_entry(hass, entry)
+
+    assert entry.unique_id is None
+    assert entry.minor_version == 2
+    assert registry.async_get(current.entity_id).unique_id == f"{entry.entry_id}_token"
+    assert registry.async_get(orphan.entity_id) is None
+    assert registry.async_get(device_sensor.entity_id) is not None
+
+
+async def test_migrate_keeps_an_already_migrated_token_sensor(hass):
+    """When the new unique ID exists, every legacy token sensor is an orphan."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: "1.2.3.4"}, version=1, minor_version=1
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    migrated = registry.async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_token", config_entry=entry
+    )
+    legacy = registry.async_get_or_create(
+        "sensor", DOMAIN, "1.2.3.4", config_entry=entry
+    )
+
+    assert await scrypted.async_migrate_entry(hass, entry)
+
+    assert registry.async_get(migrated.entity_id) is not None
+    assert registry.async_get(legacy.entity_id) is None
+
+
+async def test_migrate_without_token_sensor_and_from_the_future(hass):
+    """Nothing to move is fine; a newer major version is refused."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: "1.2.3.4"}, version=1, minor_version=1
+    )
+    entry.add_to_hass(hass)
+    assert await scrypted.async_migrate_entry(hass, entry)
+    assert entry.minor_version == 2
+    # Already current: nothing changes.
+    assert await scrypted.async_migrate_entry(hass, entry)
+
+    future = MockConfigEntry(domain=DOMAIN, data={}, version=2)
+    future.add_to_hass(hass)
+    assert await scrypted.async_migrate_entry(hass, future) is False
 
 
 async def test_async_setup_entry_handles_missing_token(hass, mock_retrieve_token_none):

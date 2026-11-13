@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from homeassistant.components.sensor import (
+    DOMAIN as SENSOR_DOMAIN,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
@@ -13,6 +14,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
+    CONF_NAME,
     LIGHT_LUX,
     PERCENTAGE,
     EntityCategory,
@@ -20,16 +22,21 @@ from homeassistant.const import (
     UnitOfRatio,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import DEFAULT_NAME, DOMAIN
 from .entity import (
     ScryptedDeviceEntity,
     ScryptedEntityDescriptionMixin,
     async_setup_scrypted_platform,
     device_matches,
 )
+from .sdk import get_base_url
+
+TOKEN_KEY = "token"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -158,12 +165,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Scrypted sensors from config entry."""
-    token = next(
-        token
-        for token, entry in hass.data[DOMAIN].items()
-        if entry.entry_id == config_entry.entry_id
+    async_add_entities(
+        [ScryptedTokenSensor(config_entry, config_entry.runtime_data.token)]
     )
-    async_add_entities([ScryptedTokenSensor(config_entry, token)])
 
     client = config_entry.runtime_data.client
 
@@ -180,24 +184,73 @@ async def async_setup_entry(
 
 
 class ScryptedTokenSensor(SensorEntity):
-    """Representation of a Scrypted token sensor."""
+    """The login token of the Scrypted account this entry uses.
 
-    def __init__(
-        self,
-        config_entry: ConfigEntry,
-        token: str,
-    ) -> None:
+    Nothing reads this at runtime; it exists so the token can be copied into
+    Scrypted's notifier settings or a hand-written resource URL. Every Home
+    Assistant user can read it and the recorder keeps its history, which the
+    README spells out. Diagnostic keeps it off auto-generated dashboards.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = TOKEN_KEY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_should_poll = False
+
+    def __init__(self, config_entry: ConfigEntry, token: str) -> None:
         """Initialize a ScryptedTokenSensor entity."""
-        self._attr_name = f"{DOMAIN.title()} token: {config_entry.data[CONF_HOST]}"
-        self._attr_unique_id = config_entry.data[CONF_HOST]
+        host = config_entry.data[CONF_HOST]
+        # Not the host: reconfiguring the host must not leave a second sensor.
+        self._attr_unique_id = token_sensor_unique_id(config_entry)
         self._attr_native_value = token
-        self._attr_icon = "mdi:shield-key"
-        # Nothing reads this at runtime; it exists so the token can be copied
-        # into Scrypted's notifier settings or a hand-written resource URL.
-        # Diagnostic keeps it off auto-generated dashboards.
-        self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        self._attr_should_poll = False
-        self._attr_extra_state_attributes = {CONF_HOST: config_entry.data[CONF_HOST]}
+        self._attr_extra_state_attributes = {CONF_HOST: host}
+        # The device representing the Scrypted server; __init__ registers the
+        # same identifier when device entities are enabled.
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            manufacturer="Scrypted",
+            name=config_entry.options.get(CONF_NAME, DEFAULT_NAME),
+            configuration_url=get_base_url(host),
+        )
+
+
+def token_sensor_unique_id(config_entry: ConfigEntry) -> str:
+    """Return the token sensor's unique ID."""
+    return f"{config_entry.entry_id}_{TOKEN_KEY}"
+
+
+@callback
+def async_migrate_token_sensor(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    """Move the token sensor off its old, host-based unique ID.
+
+    Device entities always start with the entry ID; any other sensor of this
+    entry is a token sensor from before 1.0.2. The one for the current host
+    keeps its entity ID and history under the new unique ID. Others were left
+    behind by earlier host changes and are removed.
+    """
+    registry = er.async_get(hass)
+    new_unique_id = token_sensor_unique_id(config_entry)
+    legacy = [
+        entity
+        for entity in er.async_entries_for_config_entry(registry, config_entry.entry_id)
+        if entity.domain == SENSOR_DOMAIN
+        and not entity.unique_id.startswith(f"{config_entry.entry_id}_")
+    ]
+    if not legacy:
+        return
+    if registry.async_get_entity_id(SENSOR_DOMAIN, DOMAIN, new_unique_id) is None:
+        current = next(
+            (
+                entity
+                for entity in legacy
+                if entity.unique_id == config_entry.data.get(CONF_HOST)
+            ),
+            legacy[0],
+        )
+        registry.async_update_entity(current.entity_id, new_unique_id=new_unique_id)
+        legacy.remove(current)
+    for entity in legacy:
+        registry.async_remove(entity.entity_id)
 
 
 class ScryptedSensor(ScryptedDeviceEntity, SensorEntity):

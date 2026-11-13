@@ -1,14 +1,22 @@
-"""Config flow for Scrypted integration."""
+"""Config flow for Scrypted integration.
+
+Scrypted exposes no stable server identifier (the login answers with a
+container hostname, addresses and a per-user token that changes with the
+password), so config entries carry no unique ID. Duplicates are recognised by
+host instead, and a flow that changes the host cannot prove it still points at
+the same server; reauthentication therefore never changes the host.
+"""
 
 from collections.abc import Mapping
+import logging
 from typing import Any
 
-from aiohttp import ClientError
-from scrypted_sdk import ScryptedDeviceType, ScryptedInterface
+from aiohttp import ClientError, ClientResponseError
+from scrypted_sdk import ScryptedConnectionError, ScryptedDeviceType, ScryptedInterface
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.config_entries import SOURCE_REAUTH, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import (
     CONF_HOST,
     CONF_ICON,
@@ -29,7 +37,6 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
-from homeassistant.util import slugify
 
 from .const import (
     CONF_AUTO_REGISTER_RESOURCES,
@@ -38,11 +45,16 @@ from .const import (
     CONF_EXCLUDED_PLUGINS,
     CONF_SCRYPTED_NVR,
     DEFAULT_DEVICE_TYPES,
+    DEFAULT_ICON,
+    DEFAULT_NAME,
     DOMAIN,
     EXCLUDED_DEVICE_TYPES,
     HA_PLUGIN_ID,
 )
-from .http import retrieve_token
+from .http import InvalidAuth, InvalidHost, retrieve_token
+from .sdk import get_base_url
+
+_LOGGER = logging.getLogger(__name__)
 
 # All scrypted device types a user might want mirrored as entities
 # (server plumbing types are not offered).
@@ -51,6 +63,60 @@ DEVICE_TYPE_OPTIONS = sorted(
     for device_type in ScryptedDeviceType
     if device_type.value not in EXCLUDED_DEVICE_TYPES
 )
+
+_TEXT = TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
+_USERNAME = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.TEXT, autocomplete="username")
+)
+_PASSWORD = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="current-password")
+)
+
+USER_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): _TEXT,
+        vol.Required(CONF_USERNAME): _USERNAME,
+        vol.Required(CONF_PASSWORD): _PASSWORD,
+    }
+)
+# Leaving the password empty keeps the stored one, so the form never has to
+# carry it to the browser.
+RECONFIGURE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): _TEXT,
+        vol.Required(CONF_USERNAME): _USERNAME,
+        vol.Optional(CONF_PASSWORD): _PASSWORD,
+    }
+)
+CREDENTIALS_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_USERNAME): _USERNAME,
+        vol.Required(CONF_PASSWORD): _PASSWORD,
+    }
+)
+
+
+def _normalized_host(host: Any) -> str | None:
+    """Return the server URL a host setting points at, for comparing hosts.
+
+    '1.2.3.4' and '1.2.3.4:10443' are the same server. None for anything that
+    is not a usable host.
+    """
+    if not isinstance(host, str) or not host.strip():
+        return None
+    try:
+        return get_base_url(host.strip()).lower()
+    except ScryptedConnectionError:
+        return None
+
+
+def _suggested(values: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return form suggestions without the password, which never goes back out."""
+    return {
+        key: value
+        for key, value in (values or {}).items()
+        if key != CONF_PASSWORD and value is not None
+    }
 
 
 def _plugin_options(
@@ -95,99 +161,79 @@ def _plugin_options(
     ]
 
 
-def text_selector(selector_type: TextSelectorType) -> TextSelector:
-    """Create a text selector."""
-    return TextSelector(TextSelectorConfig(type=selector_type))
-
-
-def _get_config_schema(
-    default: Mapping[str, Any] | None,
-    *,
-    include_nvr: bool = False,
-    include_auto_register: bool = False,
-) -> vol.Schema:
-    """Get config schema."""
-    if not default:
-        default = {}
-    auto_register_value = default.get(CONF_AUTO_REGISTER_RESOURCES, False)
-    schema: dict[Any, Any] = {
-        vol.Required(
-            CONF_NAME, default=default.get(CONF_NAME, DOMAIN.title())
-        ): text_selector(TextSelectorType.TEXT),
-        vol.Required(
-            CONF_ICON, default=default.get(CONF_ICON, "mdi:memory")
-        ): IconSelector(IconSelectorConfig()),
-        vol.Required(CONF_HOST, default=default.get(CONF_HOST)): text_selector(
-            TextSelectorType.TEXT
-        ),
-        vol.Required(CONF_USERNAME, default=default.get(CONF_USERNAME)): text_selector(
-            TextSelectorType.TEXT
-        ),
-        vol.Required(CONF_PASSWORD, default=default.get(CONF_PASSWORD)): text_selector(
-            TextSelectorType.PASSWORD
-        ),
-    }
-    if include_nvr:
-        schema[
-            vol.Optional(
-                CONF_SCRYPTED_NVR, default=default.get(CONF_SCRYPTED_NVR, False)
-            )
-        ] = bool
-    if include_auto_register:
-        schema[
-            vol.Required(CONF_AUTO_REGISTER_RESOURCES, default=auto_register_value)
-        ] = bool
-    return vol.Schema(schema)
-
-
 class ScryptedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Scrypted config flow."""
 
     VERSION = 1
+    # 1.2: entries no longer carry a host-based unique ID, and the token
+    # sensor's unique ID no longer is the host (see async_migrate_entry).
+    MINOR_VERSION = 2
 
-    async def validate_input(self, data: dict[str, Any]) -> bool:
-        """Validate that the host is valid."""
+    async def _async_validate(self, data: Mapping[str, Any]) -> str | None:
+        """Log in with data; return a form error key, or None when it works."""
         session = async_get_clientsession(self.hass, verify_ssl=False)
-        required_keys = [
-            CONF_HOST,
-            CONF_ICON,
-            CONF_NAME,
-            CONF_USERNAME,
-        ]
-        if CONF_AUTO_REGISTER_RESOURCES in data:
-            required_keys.append(CONF_AUTO_REGISTER_RESOURCES)
-        for key in required_keys:
-            if key not in data:
-                return False
         try:
             await retrieve_token(data, session)
-        except (ValueError, ClientError, TimeoutError):
-            # No token in the reply, a malformed host, or an unreachable or
-            # rejecting server: the form reports them all the same way.
-            return False
+        except InvalidHost:
+            return "invalid_host"
+        except InvalidAuth:
+            return "invalid_auth"
+        except ClientResponseError as err:
+            return "invalid_auth" if err.status in (401, 403) else "cannot_connect"
+        except (ClientError, TimeoutError, ValueError):
+            # ValueError: a reply that is not Scrypted's JSON login answer.
+            return "cannot_connect"
+        except Exception:
+            _LOGGER.exception("Unexpected error logging in to Scrypted")
+            return "unknown"
+        return None
 
-        return True
+    @callback
+    def _host_taken(self, host: str, ignore_entry_id: str | None = None) -> bool:
+        """Return True when another entry already points at this server."""
+        wanted = _normalized_host(host)
+        return wanted is not None and any(
+            _normalized_host(entry.data.get(CONF_HOST)) == wanted
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.entry_id != ignore_entry_id
+        )
+
+    @callback
+    def _default_name(self, host: str) -> str:
+        """Return a sidebar title no other entry uses yet."""
+        taken = {
+            entry.options.get(CONF_NAME, entry.data.get(CONF_NAME))
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+        }
+        return DEFAULT_NAME if DEFAULT_NAME not in taken else f"{DEFAULT_NAME} ({host})"
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle user flow."""
-        errors = {}
-        if user_input is not None and CONF_USERNAME in user_input:
-            if await self.validate_input(user_input):
-                await self.async_set_unique_id(slugify(user_input[CONF_HOST]))
-                self._abort_if_unique_id_configured()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if self._host_taken(user_input[CONF_HOST]):
+                return self.async_abort(reason="already_configured")
+            if error := await self._async_validate(user_input):
+                errors["base"] = error
+            else:
+                host = user_input[CONF_HOST]
                 return self.async_create_entry(
-                    title=user_input[CONF_HOST], data=user_input
+                    title=host,
+                    data=user_input,
+                    # The sidebar panel's title and icon are settings, not
+                    # connection data; the options flow changes them.
+                    options={
+                        CONF_NAME: self._default_name(host),
+                        CONF_ICON: DEFAULT_ICON,
+                    },
                 )
-            errors["base"] = "invalid_host_or_credentials"
 
         return self.async_show_form(
             step_id="user",
-            data_schema=_get_config_schema(
-                user_input,
-                include_nvr=True,
-                include_auto_register=True,
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA, _suggested(user_input)
             ),
             errors=errors,
         )
@@ -200,74 +246,84 @@ class ScryptedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_upgrade()
         return await self.async_step_credentials()
 
-    async def _async_step_update_entry(
-        self, step_id: str, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Show a form that rewrites the existing entry (reauth or reconfigure)."""
-        errors = {}
-        config_entry = (
-            self._get_reauth_entry()
-            if self.source == SOURCE_REAUTH
-            else self._get_reconfigure_entry()
-        )
-        if user_input is not None:
-            if not await self.validate_input(user_input):
-                errors["base"] = "invalid_host_or_credentials"
-            else:
-                unique_id = slugify(user_input[CONF_HOST])
-                if any(
-                    entry.unique_id == unique_id
-                    for entry in self.hass.config_entries.async_entries(DOMAIN)
-                    if entry.entry_id != config_entry.entry_id
-                ):
-                    errors[CONF_HOST] = "already_configured"
-                else:
-                    # Keep options this form does not collect (the entity
-                    # options); the fields it does collect win and live in
-                    # options, never in data.
-                    data = dict(user_input)
-                    options = dict(config_entry.options)
-                    for key in (CONF_SCRYPTED_NVR, CONF_AUTO_REGISTER_RESOURCES):
-                        if key in data:
-                            options[key] = data.pop(key)
-                    return self.async_update_reload_and_abort(
-                        config_entry,
-                        unique_id=unique_id,
-                        data=data,
-                        options=options,
-                    )
-
-        # Entries from before credentials were stored keep everything in options.
-        defaults = user_input or {**config_entry.options, **config_entry.data}
-        include_panel_options = step_id == "upgrade"
-
-        return self.async_show_form(
-            step_id=step_id,
-            data_schema=_get_config_schema(
-                defaults,
-                include_nvr=include_panel_options,
-                include_auto_register=include_panel_options,
-            ),
-            errors=errors,
-        )
-
     async def async_step_credentials(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle credentials step."""
-        return await self._async_step_update_entry("credentials", user_input)
+        """Ask for new credentials for the same host."""
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = {**entry.data, **user_input}
+            if error := await self._async_validate(data):
+                errors["base"] = error
+            else:
+                return self.async_update_reload_and_abort(entry, data=data)
+
+        return self.async_show_form(
+            step_id="credentials",
+            data_schema=self.add_suggested_values_to_schema(
+                CREDENTIALS_SCHEMA, _suggested(user_input or entry.data)
+            ),
+            description_placeholders={"host": entry.data[CONF_HOST]},
+            errors=errors,
+        )
 
     async def async_step_upgrade(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle upgrade step."""
-        return await self._async_step_update_entry("upgrade", user_input)
+        """Store credentials for an entry created before they were kept.
+
+        Such entries keep everything in options, possibly the host too, so this
+        form asks for the host as well.
+        """
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if self._host_taken(user_input[CONF_HOST], entry.entry_id):
+                errors[CONF_HOST] = "already_configured"
+            elif error := await self._async_validate(user_input):
+                errors["base"] = error
+            else:
+                return self.async_update_reload_and_abort(
+                    entry, data={**entry.data, **user_input}
+                )
+
+        return self.async_show_form(
+            step_id="upgrade",
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA, _suggested(user_input or {**entry.options, **entry.data})
+            ),
+            errors=errors,
+        )
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Let the user change the host, credentials, or panel name and icon."""
-        return await self._async_step_update_entry("reconfigure", user_input)
+        """Let the user change the host or the credentials.
+
+        Without a server identifier this cannot check that a new host is the
+        same Scrypted server; it only refuses a host another entry already uses.
+        """
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = {**entry.data, **user_input}
+            if not user_input.get(CONF_PASSWORD):
+                data[CONF_PASSWORD] = entry.data.get(CONF_PASSWORD, "")
+            if self._host_taken(data[CONF_HOST], entry.entry_id):
+                errors[CONF_HOST] = "already_configured"
+            elif error := await self._async_validate(data):
+                errors["base"] = error
+            else:
+                return self.async_update_reload_and_abort(entry, data=data)
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                RECONFIGURE_SCHEMA, _suggested(user_input or entry.data)
+            ),
+            errors=errors,
+        )
 
     @staticmethod
     @callback
@@ -291,44 +347,54 @@ class ScryptedOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle general options."""
+        options = self.config_entry.options
+        data = self.config_entry.data
         if user_input is not None:
-            data = {
-                **self.config_entry.options,
-                CONF_AUTO_REGISTER_RESOURCES: user_input[CONF_AUTO_REGISTER_RESOURCES],
-                CONF_SCRYPTED_NVR: user_input[CONF_SCRYPTED_NVR],
-                CONF_ENABLE_ENTITIES: user_input[CONF_ENABLE_ENTITIES],
-                CONF_DEVICE_TYPES: user_input[CONF_DEVICE_TYPES],
-                CONF_EXCLUDED_PLUGINS: user_input[CONF_EXCLUDED_PLUGINS],
-            }
-            return self.async_create_entry(data=data)
-
-        current_auto = self.config_entry.options.get(CONF_AUTO_REGISTER_RESOURCES)
-        if current_auto is None:
-            current_auto = self.config_entry.data.get(
-                CONF_AUTO_REGISTER_RESOURCES, False
+            return self.async_create_entry(
+                data={
+                    **options,
+                    CONF_NAME: user_input[CONF_NAME],
+                    CONF_ICON: user_input[CONF_ICON],
+                    CONF_AUTO_REGISTER_RESOURCES: user_input[
+                        CONF_AUTO_REGISTER_RESOURCES
+                    ],
+                    CONF_SCRYPTED_NVR: user_input[CONF_SCRYPTED_NVR],
+                    CONF_ENABLE_ENTITIES: user_input[CONF_ENABLE_ENTITIES],
+                    CONF_DEVICE_TYPES: user_input[CONF_DEVICE_TYPES],
+                    CONF_EXCLUDED_PLUGINS: user_input[CONF_EXCLUDED_PLUGINS],
+                }
             )
 
-        current_nvr = self.config_entry.options.get(CONF_SCRYPTED_NVR)
-        if current_nvr is None:
-            current_nvr = self.config_entry.data.get(CONF_SCRYPTED_NVR, False)
+        def current(key: str, default: Any) -> Any:
+            # Older entries kept some of these in data until their next setup.
+            return options.get(key, data.get(key, default))
 
-        current_entities = self.config_entry.options.get(CONF_ENABLE_ENTITIES, True)
-        current_types = self.config_entry.options.get(
-            CONF_DEVICE_TYPES, DEFAULT_DEVICE_TYPES
-        )
-        current_plugins = self.config_entry.options.get(CONF_EXCLUDED_PLUGINS, [])
+        current_plugins = options.get(CONF_EXCLUDED_PLUGINS, [])
 
         return self.async_show_form(
             step_id="general",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_AUTO_REGISTER_RESOURCES, default=current_auto
-                    ): bool,
-                    vol.Required(CONF_SCRYPTED_NVR, default=current_nvr): bool,
-                    vol.Required(CONF_ENABLE_ENTITIES, default=current_entities): bool,
+                        CONF_NAME, default=current(CONF_NAME, DEFAULT_NAME)
+                    ): _TEXT,
                     vol.Required(
-                        CONF_DEVICE_TYPES, default=current_types
+                        CONF_ICON, default=current(CONF_ICON, DEFAULT_ICON)
+                    ): IconSelector(IconSelectorConfig()),
+                    vol.Required(
+                        CONF_AUTO_REGISTER_RESOURCES,
+                        default=current(CONF_AUTO_REGISTER_RESOURCES, False),
+                    ): bool,
+                    vol.Required(
+                        CONF_SCRYPTED_NVR, default=current(CONF_SCRYPTED_NVR, False)
+                    ): bool,
+                    vol.Required(
+                        CONF_ENABLE_ENTITIES,
+                        default=options.get(CONF_ENABLE_ENTITIES, True),
+                    ): bool,
+                    vol.Required(
+                        CONF_DEVICE_TYPES,
+                        default=options.get(CONF_DEVICE_TYPES, DEFAULT_DEVICE_TYPES),
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=DEVICE_TYPE_OPTIONS,

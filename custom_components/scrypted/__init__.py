@@ -28,7 +28,11 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+)
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
@@ -40,12 +44,15 @@ from .const import (
     CONF_ENABLE_ENTITIES,
     CONF_SCRYPTED_NVR,
     DEFAULT_DEVICE_TYPES,
+    DEFAULT_ICON,
+    DEFAULT_NAME,
     DOMAIN,
 )
 from .entity import exposed_device
-from .http import ScryptedView, retrieve_token
+from .http import InvalidHost, ScryptedView, retrieve_token
 from .hub import ScryptedClient
 from .sdk import get_base_url
+from .sensor import async_migrate_token_sensor
 
 
 @dataclass
@@ -79,6 +86,9 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _RESOURCE_TRACKER = f"{DOMAIN}_lovelace_resources"
 _OPTION_DEFAULTS = {
+    # The sidebar panel's title and icon; entries before 1.0.2 kept them in data.
+    CONF_NAME: DEFAULT_NAME,
+    CONF_ICON: DEFAULT_ICON,
     CONF_AUTO_REGISTER_RESOURCES: False,
     CONF_SCRYPTED_NVR: False,
     CONF_ENABLE_ENTITIES: True,
@@ -111,9 +121,8 @@ async def _async_register_lovelace_resource(
     resources: ResourceStorageCollection | ResourceYAMLCollection = (
         lovelace_data.resources
     )
-    if not resources.loaded:
-        await resources.async_load()
-        resources.loaded = True
+    # Loads a storage collection on first use; YAML collections are static.
+    await resources.async_get_info()
 
     # Keep track of which URLs we created so we can cleanly undo only those later.
     tracker: dict[str, set[str]] = hass.data.setdefault(_RESOURCE_TRACKER, {})
@@ -187,9 +196,8 @@ async def _async_unregister_lovelace_resource(
     resources: ResourceStorageCollection | ResourceYAMLCollection = (
         lovelace_data.resources
     )
-    if not resources.loaded:
-        await resources.async_load()
-        resources.loaded = True
+    # Loads a storage collection on first use; YAML collections are static.
+    await resources.async_get_info()
 
     for resource_url in tracked_urls:
         # Only delete resources that are still present and managed via storage.
@@ -233,6 +241,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate an entry to the current config flow version.
+
+    1.2 drops the host-based unique ID (Scrypted has no stable server ID, and
+    an IP address is not one) and gives the token sensor a unique ID that does
+    not change with the host.
+    """
+    if config_entry.version > 1:
+        return False
+    if config_entry.minor_version < 2:
+        async_migrate_token_sensor(hass, config_entry)
+        hass.config_entries.async_update_entry(
+            config_entry, unique_id=None, minor_version=2
+        )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up a Scrypted config entry."""
 
@@ -257,6 +282,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
         raise ConfigEntryAuthFailed(
             f"Scrypted authentication failed (HTTP {err.status})"
         ) from err
+    except InvalidHost as err:
+        # Only reconfiguring the host can fix this; reauth keeps the host.
+        raise ConfigEntryError(str(err)) from err
     except ValueError as err:
         # Scrypted answers a rejected login with 200 and no token.
         raise ConfigEntryAuthFailed(str(err)) from err
@@ -281,7 +309,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
             config_entry_id=config_entry.entry_id,
             identifiers={(DOMAIN, config_entry.entry_id)},
             manufacturer="Scrypted",
-            name=config_entry.data[CONF_NAME],
+            name=config_entry.options[CONF_NAME],
             configuration_url=get_base_url(config_entry.data[CONF_HOST]),
         )
         hub_device_id = hub_device.id
@@ -322,8 +350,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     async_register_built_in_panel(
         hass,
         "custom",
-        sidebar_title=config_entry.data[CONF_NAME],
-        sidebar_icon=config_entry.data[CONF_ICON],
+        sidebar_title=config_entry.options[CONF_NAME],
+        sidebar_icon=config_entry.options[CONF_ICON],
         frontend_url_path=f"{DOMAIN}_{token}",
         config=panel_conf,
         require_admin=False,

@@ -2,7 +2,10 @@
   "config": {
     "error": {
       "already_configured": "This Scrypted host is already configured.",
-      "invalid_host_or_credentials": "Unable to login to Scrypted server, either host or credentials are invalid."
+      "cannot_connect": "Could not connect to the Scrypted server. Check the host and that the server is running and reachable over HTTPS.",
+      "invalid_auth": "Scrypted rejected the username or password.",
+      "invalid_host": "The host must be an address or hostname, optionally followed by `:port`.",
+      "unknown": "Unexpected error. Check the Home Assistant log for details."
     },
     "abort": {
       "already_configured": "This Scrypted host is already configured.",
@@ -11,47 +14,53 @@
     },
     "step": {
       "user": {
-        "description": "Enter your Scrypted server details (you must use an HTTPS endpoint) as well as a name and icon to use for the new panel on the UI.\n\nHost examples:\n- `192.168.1.124`\n- `192.168.1.124:10443`",
+        "description": "Enter the details of your Scrypted server. Home Assistant connects to it over HTTPS. The sidebar panel's title and icon can be changed in the integration options afterwards.",
         "data": {
           "host": "Host",
-          "icon": "Icon",
-          "name": "Name",
-          "password": "Password",
           "username": "Username",
-          "scrypted_nvr": "Replace Scrypted Management Console sidebar with Scrypted NVR sidebar. Requires Scrypted NVR.",
-          "auto_register_resources": "Automatically register Lovelace resources for the Scrypted NVR cards. Requires Scrypted NVR and recommended if so."
-        }
-      },
-      "upgrade": {
-        "description": "Once you enter your credentials, your config entry will now automatically set up a panel for you in the UI with the specified name and icon. Once this is complete, you can remove the `panel_iframe` in your configuration.yaml if you created one for this entry. If your credentials don't work, validate that the server host is an HTTPS endpoint and that your credentials are correct.",
-        "data": {
-          "host": "Host",
-          "icon": "Icon",
-          "name": "Name",
-          "password": "Password",
-          "username": "Username",
-          "scrypted_nvr": "Replace Scrypted Management Console sidebar with Scrypted NVR sidebar. Requires Scrypted NVR.",
-          "auto_register_resources": "Automatically register Lovelace resources for the Scrypted NVR cards. Requires Scrypted NVR and recommended if so."
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Scrypted server, optionally with its HTTPS port (default 10443), for example `192.168.1.124` or `192.168.1.124:10443`.",
+          "username": "The Scrypted account Home Assistant logs in as. Its permissions decide what the integration, the sidebar panel and the camera card can reach.",
+          "password": "The password of that Scrypted account."
         }
       },
       "credentials": {
-        "description": "The host/credentials combination is no longer working. Please update your host and/or credentials to continue.",
+        "description": "Scrypted at {host} no longer accepts the stored credentials. Enter the username and password to use from now on.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "The Scrypted account Home Assistant logs in as. Its permissions decide what the integration, the sidebar panel and the camera card can reach.",
+          "password": "The password of that Scrypted account."
+        }
+      },
+      "upgrade": {
+        "description": "This entry was created before the integration stored credentials. Enter them once, and the integration will set up its sidebar panel. You can then remove any `panel_iframe` you created for this server in configuration.yaml.",
         "data": {
           "host": "Host",
-          "icon": "Icon",
-          "name": "Name",
-          "password": "Password",
-          "username": "Username"
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Scrypted server, optionally with its HTTPS port (default 10443), for example `192.168.1.124` or `192.168.1.124:10443`.",
+          "username": "The Scrypted account Home Assistant logs in as. Its permissions decide what the integration, the sidebar panel and the camera card can reach.",
+          "password": "The password of that Scrypted account."
         }
       },
       "reconfigure": {
-        "description": "Update the Scrypted server details (you must use an HTTPS endpoint), or the name and icon of its panel.",
+        "description": "Update the Scrypted server address or the account Home Assistant uses. The integration cannot tell whether a new address is the same Scrypted server, so only change it when the server moved.",
         "data": {
           "host": "Host",
-          "icon": "Icon",
-          "name": "Name",
-          "password": "Password",
-          "username": "Username"
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Scrypted server, optionally with its HTTPS port (default 10443), for example `192.168.1.124` or `192.168.1.124:10443`.",
+          "username": "The Scrypted account Home Assistant logs in as. Its permissions decide what the integration, the sidebar panel and the camera card can reach.",
+          "password": "Leave empty to keep the current password."
         }
       }
     }
@@ -59,8 +68,10 @@
   "options": {
     "step": {
       "general": {
-        "description": "Choose whether Scrypted should automatically register and manage the Lovelace resources required for its NVR cards. These files are sizable, so you can opt out if you prefer to manage them manually.",
+        "description": "Settings for the sidebar panel, the Scrypted NVR cards and the entities created for Scrypted devices.",
         "data": {
+          "name": "Sidebar title",
+          "icon": "Sidebar icon",
           "auto_register_resources": "Automatically register Scrypted NVR Lovelace resources",
           "scrypted_nvr": "Replace Scrypted Management Console sidebar with Scrypted NVR sidebar. Requires Scrypted NVR.",
           "enable_entities": "Create entities for Scrypted devices",
@@ -68,6 +79,11 @@
           "excluded_plugins": "Scrypted plugins to exclude"
         },
         "data_description": {
+          "name": "Title of this server's panel in the sidebar. It also names the Scrypted server device.",
+          "icon": "Icon of this server's panel in the sidebar.",
+          "auto_register_resources": "Adds the Scrypted NVR card files as dashboard resources and removes them again when the integration is removed. They are sizable; leave this off if you register them yourself. Requires Scrypted NVR.",
+          "scrypted_nvr": "Shows the Scrypted NVR interface in the sidebar panel instead of the management console.",
+          "enable_entities": "Connects to Scrypted and mirrors its devices as Home Assistant entities. Turn off to keep only the sidebar panel and the camera card.",
           "device_types": "Smart Motion and Smart Occupancy Sensors from Scrypted's object detection plugin are always included. Other Sensor devices are often bridged from integrations Home Assistant already has, such as Ring, UniFi Protect or MQTT. Selecting Notifier adds a switch that mutes each Scrypted app's notifications; anyone with Home Assistant access can then mute any household member's phone.",
           "excluded_plugins": "Devices from these plugins never get entities, whatever their type. Use it for plugins that bridge devices Home Assistant already integrates. Excluding the object detection plugin also hides its smart sensors."
         }
@@ -132,6 +148,9 @@
       }
     },
     "sensor": {
+      "token": {
+        "name": "Token"
+      },
       "temperature": {
         "name": "Temperature"
       },
