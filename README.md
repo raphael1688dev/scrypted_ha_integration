@@ -98,6 +98,50 @@ runs `python scripts/update_card.py vX.Y.Z`, which can also be run by hand.
 A new card reaches users with the next integration release, after a Home
 Assistant restart.
 
+## Setup and settings
+
+Setup asks for the Scrypted host (`192.168.1.124`, or `192.168.1.124:10443`
+for another port), username and password. Everything else is under
+**Configure**: the sidebar panel's title and icon, the Scrypted NVR options
+and which devices get entities. Entries created before 1.0.2 move their panel
+title and icon there automatically.
+
+- Each Scrypted server can be added once. Servers are recognised by host, so
+  `192.168.1.124` and `192.168.1.124:10443` count as the same one.
+- When the stored credentials stop working, Home Assistant asks for a new
+  username and password. That form keeps the host.
+- **Reconfigure** changes the host or the account. Leave the password empty to
+  keep the current one. Scrypted has no server ID the integration could check,
+  so it cannot tell whether a new address is the same server: only change it
+  when the server moved.
+
+## Security
+
+The integration logs in to Scrypted as the account you configure, and every
+part of it acts as that account. The sidebar panel, the camera card and the
+media browser reach Scrypted through Home Assistant at
+`/api/scrypted/<token>/…`. That path needs no Home Assistant login: the token
+in it is the credential.
+
+- Every Home Assistant user, administrator or not, can open the sidebar panel
+  and so obtain the token. The panel stays open to all users because the
+  camera card finds Scrypted through it, including on non-administrator
+  accounts such as wall tablets.
+- The diagnostic **Token** sensor shows the same token, so it can be copied
+  into Scrypted's notifier settings. Home Assistant's recorder keeps its
+  history; to stop that, exclude it in `configuration.yaml`:
+
+  ```yaml
+  recorder:
+    exclude:
+      entity_globs:
+        - sensor.scrypted*token*
+  ```
+
+Treat every Home Assistant account as having the configured Scrypted
+account's access. If that is too much, set the integration up with a Scrypted
+user that only has the permissions you want Home Assistant to have.
+
 ## Development
 
 ### Using Dev Container (Recommended)

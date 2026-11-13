@@ -1,5 +1,10 @@
 {
   "entity": {
+    "sensor": {
+      "token": {
+        "default": "mdi:shield-key"
+      }
+    },
     "switch": {
       "notifications": {
         "default": "mdi:bell"

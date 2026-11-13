@@ -5,6 +5,10 @@ CONF_SCRYPTED_NVR = "scrypted_nvr"
 CONF_AUTO_REGISTER_RESOURCES = "auto_register_resources"
 DEFAULT_SCRYPTED_PORT = "10443"
 
+# Sidebar panel title and icon for a new entry; both live in the options.
+DEFAULT_NAME = "Scrypted"
+DEFAULT_ICON = "mdi:memory"
+
 LIT_CORE_FILENAME = "lit-core.min.js"
 ENTRYPOINT_JS_FILENAME = "entrypoint.js"
 ENTRYPOINT_HTML_FILENAME = "entrypoint.html"

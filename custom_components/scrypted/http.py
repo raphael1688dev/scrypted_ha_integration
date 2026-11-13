@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 import aiohttp
 from aiohttp import ClientTimeout, hdrs, web
-from aiohttp.web_exceptions import HTTPBadGateway, HTTPBadRequest
+from aiohttp.web_exceptions import HTTPBadGateway, HTTPBadRequest, HTTPNotFound
 from multidict import CIMultiDict
 from yarl import URL
 
@@ -31,14 +31,27 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class InvalidHost(ValueError):
+    """The configured host is not 'ip' or 'ip:port'."""
+
+
+class InvalidAuth(ValueError):
+    """Scrypted answered the login without a token."""
+
+
 async def retrieve_token(data: dict[str, Any], session: aiohttp.ClientSession) -> str:
-    """Retrieve token from Scrypted server."""
+    """Retrieve token from Scrypted server.
+
+    Raises InvalidHost for a malformed host, InvalidAuth when Scrypted rejects
+    the login with a 200 and no token, and aiohttp errors for everything the
+    request itself runs into (including 401/403 as ClientResponseError).
+    """
     username = data[CONF_USERNAME]
     password = data.get(CONF_PASSWORD, "")
     host = data[CONF_HOST]
     ipport = host.split(":")
     if len(ipport) > 2:
-        raise ValueError("invalid Scrypted host")
+        raise InvalidHost("invalid Scrypted host")
     ip = ipport[0]
     if len(ipport) == 2:
         port = ipport[1]
@@ -58,7 +71,7 @@ async def retrieve_token(data: dict[str, Any], session: aiohttp.ClientSession) -
     finally:
         resp.release()
     if "token" not in resp_json:
-        raise ValueError("No token in response")
+        raise InvalidAuth("No token in response")
 
     return resp_json["token"]
 
@@ -94,13 +107,23 @@ class ScryptedView(HomeAssistantView):
             lambda: self.entrypoint_html.set_result(entrypoint_html)
         )
 
+    def _entry(self, token: str) -> ConfigEntry:
+        """Return the loaded entry for token, or answer 404.
+
+        The view needs no Home Assistant login, so an unknown token is an
+        ordinary client error rather than something to log a traceback for.
+        """
+        entry: ConfigEntry | None = self.hass.data.get(DOMAIN, {}).get(token)
+        if entry is None:
+            raise HTTPNotFound()
+        return entry
+
     def _create_url(self, token: str, path: str) -> str:
         """Create URL to service."""
-        entry: ConfigEntry = self.hass.data[DOMAIN][token]
-        host = entry.data[CONF_HOST]
+        host = self._entry(token).data[CONF_HOST]
         ipport = host.split(":")
         if len(ipport) > 2:
-            raise Exception("invalid Scrypted host")
+            raise InvalidHost("invalid Scrypted host")
         ip = ipport[0]
         if len(ipport) == 2:
             port = ipport[1]
@@ -122,6 +145,7 @@ class ScryptedView(HomeAssistantView):
         self, request: web.Request, token: str, path: str
     ) -> web.Response | web.StreamResponse | web.WebSocketResponse:
         """Route data to Hass.io ingress service."""
+        entry = self._entry(token)
         try:
             if path == LIT_CORE_FILENAME:
                 response = web.Response(
@@ -154,7 +178,6 @@ class ScryptedView(HomeAssistantView):
                     .replace("__DOMAIN__", DOMAIN)
                     .replace("__TOKEN__", token)
                 )
-                entry: ConfigEntry = self.hass.data[DOMAIN][token]
                 if entry.options.get(
                     CONF_SCRYPTED_NVR, entry.data.get(CONF_SCRYPTED_NVR, False)
                 ):

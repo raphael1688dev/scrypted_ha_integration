@@ -5,7 +5,7 @@
     "security_safety.cameras"
   ],
   "codeowners": [
-    "@koush"
+    "@raphael1688"
   ],
   "config_flow": true,
   "dependencies": [
@@ -15,10 +15,10 @@
     "media_source",
     "stream"
   ],
-  "documentation": "https://github.com/koush/ha_scrypted",
+  "documentation": "https://github.com/raphael1688dev/scrypted_ha_integration",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/koush/ha_scrypted/issues",
+  "issue_tracker": "https://github.com/raphael1688dev/scrypted_ha_integration/issues",
   "requirements": [
     "scrypted-sdk==0.1.1"
   ],

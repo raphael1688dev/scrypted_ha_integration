@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 from aiohttp import hdrs, web
-from aiohttp.web_exceptions import HTTPBadGateway, HTTPBadRequest
+from aiohttp.web_exceptions import HTTPBadGateway, HTTPBadRequest, HTTPNotFound
 import pytest
 from pytest_homeassistant.common import MockConfigEntry
 
@@ -24,6 +24,7 @@ from custom_components.scrypted.const import (
     ENTRYPOINT_JS_FILENAME,
     LIT_CORE_FILENAME,
 )
+from tests.conftest import setup_entry
 from tests.const import (
     API_PATH,
     GENERIC_PATH,
@@ -120,7 +121,7 @@ async def test_retrieve_token_encodes_credentials_as_utf8(login_success_fixture)
 
 
 async def test_retrieve_token_no_token_in_response(login_error_not_logged_in_fixture):
-    """Test ValueError is raised when response has no token."""
+    """A login answered without a token raises InvalidAuth."""
     mock_response = AsyncMock()
     mock_response.release = MagicMock()
     mock_response.json = AsyncMock(return_value=login_error_not_logged_in_fixture)
@@ -134,7 +135,7 @@ async def test_retrieve_token_no_token_in_response(login_error_not_logged_in_fix
         CONF_PASSWORD: "wrongpass",
     }
 
-    with pytest.raises(ValueError, match="No token in response"):
+    with pytest.raises(http.InvalidAuth, match="No token in response"):
         await http.retrieve_token(data, mock_session)
     # Released even when the reply carries no token.
     mock_response.release.assert_called_once_with()
@@ -150,7 +151,7 @@ async def test_retrieve_token_invalid_host_too_many_colons():
         CONF_PASSWORD: PASSWORD,
     }
 
-    with pytest.raises(Exception, match="invalid Scrypted host"):
+    with pytest.raises(http.InvalidHost, match="invalid Scrypted host"):
         await http.retrieve_token(data, mock_session)
 
 
@@ -188,7 +189,7 @@ async def test_create_url_invalid_host(hass, scrypted_view):
     """Test URL creation fails for invalid host."""
     _register_entry(hass, host=f"{HOST_WITH_PORT}:extra")
 
-    with pytest.raises(Exception, match="invalid Scrypted host"):
+    with pytest.raises(http.InvalidHost, match="invalid Scrypted host"):
         scrypted_view._create_url(TOKEN, "path")
 
 
@@ -336,9 +337,10 @@ def test_init_header_raises_on_missing_peername(mock_web_request):
     ],
 )
 async def test_handle_static_js(
-    scrypted_view, mock_web_request, path, token, expected_strings
+    hass, scrypted_view, mock_web_request, path, token, expected_strings
 ):
     """Static JS assets should be served with cache disabled."""
+    _register_entry(hass, token=token)
     request = mock_web_request()
     response = await scrypted_view._handle(request, token, path)
 
@@ -347,6 +349,37 @@ async def test_handle_static_js(
         assert expected in body_text
     assert response.headers["Content-Type"] == "text/javascript"
     assert response.headers["Cache-Control"] == "no-store, max-age=0"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [LIT_CORE_FILENAME, ENTRYPOINT_JS_FILENAME, ENTRYPOINT_HTML_FILENAME, API_PATH],
+)
+async def test_handle_unknown_token_is_not_found(
+    hass, scrypted_view, mock_web_request, path
+):
+    """An unknown token is a plain 404: the view needs no login, so no traceback."""
+    _register_entry(hass)
+    with pytest.raises(HTTPNotFound):
+        await scrypted_view._handle(mock_web_request(), "not-a-token", path)
+
+
+async def test_handle_without_loaded_entries_is_not_found(
+    hass, scrypted_view, mock_web_request
+):
+    """With no entry loaded at all the view still answers 404."""
+    hass.data.pop(DOMAIN, None)
+    with pytest.raises(HTTPNotFound):
+        await scrypted_view._handle(mock_web_request(), TOKEN, API_PATH)
+
+
+async def test_unknown_token_logs_nothing(hass, hass_client_no_auth, caplog):
+    """Through the real server: 404 and no error in the log."""
+    await setup_entry(hass)
+    client = await hass_client_no_auth()
+    resp = await client.get(f"/api/{DOMAIN}/not-a-token/endpoint/x")
+    assert resp.status == 404
+    assert not [r for r in caplog.records if r.levelname in ("ERROR", "CRITICAL")]
 
 
 @pytest.mark.parametrize(

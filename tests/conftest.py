@@ -94,8 +94,8 @@ def mock_retrieve_token():
 
 @pytest.fixture
 def mock_retrieve_token_error():
-    """Patch retrieve_token to raise ValueError (invalid credentials)."""
-    with _patch_retrieve_token(_raise(ValueError())) as mocks:
+    """Patch retrieve_token to raise InvalidAuth (rejected credentials)."""
+    with _patch_retrieve_token(_raise(http.InvalidAuth())) as mocks:
         yield mocks
 
 

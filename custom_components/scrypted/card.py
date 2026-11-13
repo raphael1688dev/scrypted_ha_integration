@@ -19,15 +19,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from homeassistant.components.frontend import (
-    DATA_EXTRA_MODULE_URL,
-    add_extra_js_url,
-    remove_extra_js_url,
-)
+from homeassistant.components.frontend import add_extra_js_url, remove_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.const import DOMAIN as LL_DOMAIN
 from homeassistant.const import CONF_URL
 from homeassistant.core import HomeAssistant
+from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
 
@@ -45,6 +42,11 @@ CARD_URL = f"/{DOMAIN}_static/{CARD_FILENAME}"
 # static path is served with long-lived cache headers.
 CARD_MODULE_URL = f"{CARD_URL}?v={CARD_VERSION}"
 
+# Whether this integration currently has the card on the frontend's extra
+# module list. Kept here rather than read back from the frontend's own data,
+# which is not part of its public API.
+DATA_CARD_LOADED: HassKey[bool] = HassKey(f"{DOMAIN}_card_loaded")
+
 
 async def async_register_card(hass: HomeAssistant) -> None:
     """Serve the bundled card. Whether pages load it is async_sync_card's call."""
@@ -59,9 +61,8 @@ async def _async_standalone_card_urls(hass: HomeAssistant) -> list[str]:
     if not lovelace_data or not lovelace_data.resources:
         return []
     resources = lovelace_data.resources
-    if not resources.loaded:
-        await resources.async_load()
-        resources.loaded = True
+    # Loads a storage collection on first use; YAML collections are static.
+    await resources.async_get_info()
     return [
         url
         for item in resources.async_items()
@@ -78,11 +79,12 @@ async def async_sync_card(hass: HomeAssistant) -> None:
     clean up. Called on every entry (re)load, so adding or removing a resource
     takes effect after reloading the integration and the page.
     """
-    loaded = CARD_MODULE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
+    loaded = hass.data.get(DATA_CARD_LOADED, False)
     standalone = await _async_standalone_card_urls(hass)
     if standalone:
         if loaded:
             remove_extra_js_url(hass, CARD_MODULE_URL)
+            hass.data[DATA_CARD_LOADED] = False
         _LOGGER.info(
             "Not loading the bundled scrypted-camera-card %s: the card is "
             "registered as a dashboard resource (%s), which takes precedence",
@@ -91,3 +93,4 @@ async def async_sync_card(hass: HomeAssistant) -> None:
         )
     elif not loaded:
         add_extra_js_url(hass, CARD_MODULE_URL)
+        hass.data[DATA_CARD_LOADED] = True

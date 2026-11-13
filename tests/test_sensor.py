@@ -6,7 +6,8 @@ from types import SimpleNamespace
 
 from pytest_homeassistant.common import MockConfigEntry
 
-from homeassistant.const import CONF_HOST, EntityCategory
+from homeassistant.const import CONF_HOST, CONF_NAME, EntityCategory
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.scrypted import ScryptedRuntimeData, sensor
 from custom_components.scrypted.const import DOMAIN
@@ -16,21 +17,29 @@ from tests.const import EXAMPLE_HOST
 
 
 def test_sensor_attributes():
-    """Test case for test_sensor_attributes."""
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: EXAMPLE_HOST})
+    """The token sensor is named by translation and belongs to the server device."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_HOST: EXAMPLE_HOST},
+        options={CONF_NAME: "My Scrypted"},
+    )
     entity = sensor.ScryptedTokenSensor(entry, "token")
-    assert entity.name == f"Scrypted token: {EXAMPLE_HOST}"
+    assert entity.has_entity_name is True
+    assert entity.translation_key == "token"
+    # Not the host, so changing the host keeps the same entity.
+    assert entity.unique_id == f"{entry.entry_id}_token"
     assert entity.native_value == "token"
     assert entity.extra_state_attributes[CONF_HOST] == EXAMPLE_HOST
     assert entity.entity_category is EntityCategory.DIAGNOSTIC
+    assert entity.device_info.identifiers == {(DOMAIN, entry.entry_id)}
+    assert entity.device_info.name == "My Scrypted"
 
 
 async def test_async_setup_entry_adds_token_sensor(hass):
-    """Test case for test_async_setup_entry_adds_token_sensor."""
+    """The token comes from the entry's runtime data."""
     entry = MockConfigEntry(domain=DOMAIN, data={CONF_HOST: EXAMPLE_HOST})
     entry.add_to_hass(hass)
-    entry.runtime_data = SimpleNamespace(client=None)
-    hass.data.setdefault(DOMAIN, {})["token"] = entry
+    entry.runtime_data = SimpleNamespace(client=None, token="token")
     added = []
 
     def _add_entities(entities):
@@ -39,6 +48,30 @@ async def test_async_setup_entry_adds_token_sensor(hass):
     await sensor.async_setup_entry(hass, entry, _add_entities)
     assert len(added) == 1
     assert added[0].native_value == "token"
+
+
+async def test_token_sensor_survives_a_host_change(hass):
+    """Reconfiguring the host keeps one token sensor, under the same entity ID."""
+    entry = await setup_entry(hass)
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_token"
+    )
+    assert hass.states.get(entity_id).name == "Scrypted Token"
+
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, CONF_HOST: "5.6.7.8"}
+    )
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    token_sensors = [
+        e
+        for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+        if e.unique_id.endswith("_token")
+    ]
+    assert [e.entity_id for e in token_sensors] == [entity_id]
+    assert hass.states.get(entity_id).attributes[CONF_HOST] == "5.6.7.8"
 
 
 async def test_device_sensors_created(hass, fake_sdk):
