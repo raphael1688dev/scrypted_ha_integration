@@ -7,8 +7,33 @@ cards.
 
 ![Scrypted Dashboard](https://github.com/koush/ha_scrypted/assets/73924/b76b239a-a61a-451a-84aa-1d3621594a68)
 
-Visit the [Scrypted Documentation](https://docs.scrypted.app/home-assistant.html)
-for setup instructions. Requires Home Assistant 2026.11 or newer.
+Requires Home Assistant 2026.11 or newer.
+
+## Installation
+
+Install it from this repository. The Scrypted documentation's Home Assistant
+page installs the original integration instead, so use the steps below for
+installing and that page only for the Scrypted side (NVR cards, the token).
+
+1. **Marketplace** > **Add from a GitHub link** >
+   `https://github.com/raphael1688dev/scrypted_ha_integration`, type
+   **Integration**, then download it.
+2. Restart Home Assistant.
+3. **Settings** > **Devices & services** > **Add integration** >
+   **Scrypted HA(Mod)**, and enter the Scrypted host, username and password
+   (see [Setup and settings](#setup-and-settings)).
+
+### Switching from koush/ha_scrypted
+
+Both integrations use the domain `scrypted`, so only one can be installed.
+Remove the koush/ha_scrypted repository from the Marketplace, add this one
+as above and restart Home Assistant. Keep the existing Scrypted entry: it
+carries over with its entities and dashboards, and the update moves its
+settings to the current layout on the first start.
+
+To check which one is running, open **Settings** > **Devices & services**:
+this integration is listed as **Scrypted HA(Mod)**, the original as
+**Scrypted**.
 
 ## Device entities
 
