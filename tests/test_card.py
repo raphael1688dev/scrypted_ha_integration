@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 
 from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
@@ -33,6 +34,12 @@ def test_vendored_bundle_matches_recorded_release():
     assert card.CARD_VERSION.encode() in bundle
     assert card.CARD_MODULE_URL.endswith(f"?v={card.CARD_VERSION}")
     assert (card.CARD_PATH.parent / "LICENSE.scrypted-camera-card").is_file()
+
+
+def test_readme_names_the_bundled_version():
+    """The README states the bundled version; scripts/update_card.py keeps it."""
+    readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
+    assert f"\nThe bundled card is version {card.CARD_VERSION}.\n" in readme
 
 
 async def test_card_is_served_and_loaded_on_every_page(hass, hass_client):

@@ -1,9 +1,9 @@
 """Vendor a tagged scrypted-camera-card release into the integration.
 
 Downloads the built card from the release's assets, writes it to
-custom_components/scrypted/frontend/ and records its version and SHA-256 in
-custom_components/scrypted/card.py. The card repository stays the source of
-truth; nothing is built here.
+custom_components/scrypted/frontend/, records its version and SHA-256 in
+custom_components/scrypted/card.py and updates the version the README names.
+The card repository stays the source of truth; nothing is built here.
 
 Usage:
     python scripts/update_card.py v0.5.10
@@ -24,6 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "scrypted"
 CARD_FILE = INTEGRATION / "frontend" / ASSET
 CARD_MODULE = INTEGRATION / "card.py"
+README = ROOT / "README.md"
+# The README sentence naming the bundled version; tests check it stays in step.
+README_VERSION = re.compile(r"^The bundled card is version [0-9.]+\.$", re.MULTILINE)
 
 
 def _set_constant(source: str, name: str, value: str) -> str:
@@ -58,6 +61,13 @@ def main(argv: list[str]) -> None:
     source = _set_constant(source, "CARD_VERSION", version)
     source = _set_constant(source, "CARD_SHA256", digest)
     CARD_MODULE.write_text(source, encoding="utf-8")
+    readme, count = README_VERSION.subn(
+        f"The bundled card is version {version}.",
+        README.read_text(encoding="utf-8"),
+    )
+    if count != 1:
+        raise SystemExit(f"expected exactly one bundled-version sentence in {README}")
+    README.write_text(readme, encoding="utf-8")
     print(f"{ASSET} {version}: {len(bundle)} bytes, sha256 {digest}")
 
 

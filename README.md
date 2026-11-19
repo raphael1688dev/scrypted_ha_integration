@@ -3,7 +3,9 @@
 A modified fork of [koush/ha_scrypted](https://github.com/koush/ha_scrypted),
 the Scrypted custom component for Home Assistant. It adds support for managing
 Scrypted from your Home Assistant Dashboard, and creation of Scrypted NVR
-cards.
+cards. Unlike the original, it also brings live WebRTC video to dashboards
+without a Scrypted NVR subscription, through a bundled camera card (see
+[Live video](#live-video-the-bundled-camera-card)).
 
 ![Scrypted Dashboard](https://github.com/koush/ha_scrypted/assets/73924/b76b239a-a61a-451a-84aa-1d3621594a68)
 
@@ -101,6 +103,13 @@ a dashboard card that plays a Scrypted camera over WebRTC, with talkback and
 fullscreen. It needs no Scrypted NVR subscription and no separate install: the
 card is loaded on every dashboard as soon as the integration is set up.
 
+The bundled card is version 0.5.10.
+
+The card is a fork of
+[digaus/scrypted-camera-card](https://github.com/digaus/scrypted-camera-card)
+by Dirk Gausmann, who wrote most of it; the fork adds fullscreen, the `fit`
+option and stopping the stream when the card leaves the screen.
+
 ```yaml
 type: custom:scrypted-camera-card
 device: Front Door  # Scrypted device name or id
@@ -108,6 +117,11 @@ device: Front Door  # Scrypted device name or id
 
 The Scrypted device id is also shown as the `device_id` attribute of each
 camera entity. See the card's README for every option.
+
+Talkback needs Home Assistant opened over HTTPS (or from `localhost`): on a
+plain `http://` address the browser gives the page no access to the
+microphone, so the microphone button fails. The same applies to the
+companion app when its address is plain HTTP.
 
 The card remains a separate project and can still be installed on its own.
 If it is registered as a dashboard resource (a Marketplace install, or a build
